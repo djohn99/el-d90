@@ -2,6 +2,37 @@
 
 An independent, local Kubernetes desktop workspace for macOS. Open multiple cluster workspaces, select several namespaces, inspect resources, and work with YAML, logs and terminals in context.
 
+## Download and install
+
+**[⬇ Download el-d90 0.5.1 for Apple Silicon](https://github.com/djohn99/el-d90/releases/download/v0.5.1/el-d90-0.5.1-mac-arm64.dmg)**
+
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.1) · [All releases](https://github.com/djohn99/el-d90/releases)
+
+1. Download the DMG using the link above.
+2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
+3. Eject the disk image, then open **el-d90** from your Applications folder.
+4. Install `kubectl` and configure your own kubeconfig and authentication plugins, then select your cluster context in the app. EKS users need a compatible AWS CLI and their own AWS sign-in. Install Helm if you want to manage Helm releases.
+
+The current build is **ad-hoc signed**, not Developer ID signed or Apple notarized. macOS may require your security approval. Credentials and local profiles are not included in the download.
+
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.1/el-d90-0.5.1-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+
+```sh
+shasum -a 256 -c el-d90-0.5.1-mac-arm64.dmg.sha256
+```
+
+## Screenshots
+
+Cluster overview with workload health and recent activity:
+
+![el-d90 cluster overview showing workload health, namespaces and recent Events](docs/images/overview.png)
+
+Deployment inspection with combined replica logs:
+
+![el-d90 Deployment detail drawer with combined replica logs](docs/images/deployment-logs.png)
+
+*Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
+
 ## Features
 
 - Concurrent cluster tabs with independent namespace sets, views and connection state.
