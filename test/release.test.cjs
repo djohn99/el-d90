@@ -1,0 +1,5 @@
+const{test}=require('node:test'),assert=require('node:assert/strict'),{metadata}=require('../scripts/release-metadata.cjs');
+const valid={version:'1.2.3',event:'push',refType:'tag',refName:'v1.2.3',platform:'darwin',arch:'arm64'};
+test('release metadata binds a version tag to package version and architecture',()=>{assert.deepEqual(metadata(valid),{version:'1.2.3',tag:'v1.2.3',artifact:'el-d90-1.2.3-mac-arm64',prerelease:'false'});for(const change of [{refName:'v9.9.9'},{refType:'branch'},{platform:'linux'},{arch:'x64'},{version:'1.2.3\nunsafe'}])assert.throws(()=>metadata({...valid,...change}));});
+test('manual build checks do not require creating a release tag',()=>{assert.equal(metadata({...valid,event:'workflow_dispatch',refType:'branch',refName:'main'}).version,'1.2.3');assert.throws(()=>metadata({...valid,event:'pull_request'}));});
+test('prerelease tags are identified without changing their release identity',()=>{assert.equal(metadata({...valid,version:'1.2.3-rc.1',refName:'v1.2.3-rc.1'}).prerelease,'true');});

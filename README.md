@@ -1,10 +1,14 @@
 # el-d90
 
+Created and maintained by **[David John (@djohn99)](https://github.com/djohn99)**.
+
 An independent, local Kubernetes desktop workspace for macOS. Open multiple cluster workspaces, select several namespaces, inspect resources, and work with YAML, logs and terminals in context.
 
 ## Download and install
 
-**[⬇ Download el-d90 0.5.1 for Apple Silicon](https://github.com/djohn99/el-d90/releases/download/v0.5.1/el-d90-0.5.1-mac-arm64.dmg)**
+**[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
+
+[Direct DMG download for 0.5.1](https://github.com/djohn99/el-d90/releases/download/v0.5.1/el-d90-0.5.1-mac-arm64.dmg)
 
 Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.1) · [All releases](https://github.com/djohn99/el-d90/releases)
 
@@ -89,7 +93,7 @@ npm test
 npm run test:desktop-all
 ```
 
-The backend suite has 108 checks. Seven desktop suites use isolated profiles and offline CLI fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling and independent sessions. The session suite also checks drag/keyboard resizing, panel dismissal and selected-session closure.
+The backend suite has 111 checks. Seven desktop suites use isolated profiles and offline CLI fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling and independent sessions. The session suite also checks drag/keyboard resizing, panel dismissal and selected-session closure.
 
 To test an existing package, set `EL_D90_APP_EXECUTABLE` to its executable path. Automated tests do not require real cluster credentials. Live node SSH, privileged debug and Helm mutations are not established by fixture tests.
 
@@ -123,3 +127,23 @@ See [PROVENANCE.md](PROVENANCE.md) for the bounded source/asset comparison and [
 ## License
 
 Original project source and visual identity are MIT licensed. Dependencies retain their own licenses.
+
+## Author and official builds
+
+**David John ([@djohn99](https://github.com/djohn99))** created and maintains el-d90. The repository is owned by `djohn99`, original source carries David John’s MIT copyright, and future packaged builds show the author credit in **el-d90 → About**.
+
+Download official builds from [this repository’s Releases](https://github.com/djohn99/el-d90/releases). Releases produced by the automated workflow include GitHub build-provenance attestations linking the DMG to this repository, its commit and its workflow. Verify a downloaded automated build with `gh attestation verify <downloaded-file.dmg> --repo djohn99/el-d90`. The manually published 0.5.1 release predates this workflow and has no attestation. An attestation establishes build origin; it is separate from Apple Developer ID signing and notarization.
+
+## Automated releases
+
+Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.2` for version `0.5.2`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+
+After committing your next changes:
+
+```sh
+npm version patch
+# npm updates package.json/package-lock.json and creates the matching commit and tag.
+git push origin main --follow-tags
+```
+
+The workflow uses GitHub’s temporary `GITHUB_TOKEN`; no personal access token or Apple certificate secret is required for ad-hoc builds. `contents: write` is limited to the publishing job; the build job has provenance permissions. The separate **Run workflow** button builds, tests and retains a downloadable Actions artifact without publishing a release or creating a new version tag. It can be used to validate changes to the pipeline.
