@@ -1,0 +1,2 @@
+dmgbuild==1.6.7
+pillow==13.0.0

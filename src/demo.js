@@ -1,0 +1,37 @@
+(() => {
+  const ago = minutes => new Date(Date.now() - minutes * 60000).toISOString();
+  const resource = (kind, name, namespace, spec = {}, status = {}, minutes = 120) => ({ apiVersion: 'v1', kind, metadata: { name, namespace, creationTimestamp: ago(minutes), labels: { app: name.split('-')[0], 'app.kubernetes.io/managed-by': 'el-d90 demo' } }, spec, status });
+  const pod = (name, ns, phase = 'Running', ready = true, restarts = 0) => resource('Pod', name, ns, { nodeName: 'worker-eu-01', containers: [{ name: name.split('-')[0], image: `${name.split('-')[0]}:1.4.2` }] }, { phase, podIP: '10.42.1.24', containerStatuses: [{ name: name.split('-')[0], ready, restartCount: restarts, state: phase === 'Pending' ? { waiting: { reason: 'ContainerCreating' } } : phase === 'Failed' ? { waiting: { reason: 'CrashLoopBackOff' } } : { running: { startedAt: ago(80) } } }] });
+  const pods = [pod('api-gateway-7f98d6b5-x4j2k', 'production'), pod('api-gateway-7f98d6b5-m9p3n', 'production'), pod('web-frontend-64b79cf8-q7w2e', 'production'), pod('web-frontend-64b79cf8-k8h5r', 'production'), pod('payments-worker-85d69bc4-z2v6s', 'production'), pod('redis-cache-0', 'production'), pod('postgres-primary-0', 'production'), pod('metrics-collector-576b9f7c-d4t8y', 'observability'), pod('prometheus-server-0', 'observability'), pod('coredns-76f75df5-v6k2w', 'kube-system'), pod('image-processor-6f98d7c4-p9r2a', 'staging', 'Pending', false), pod('notification-worker-689d7cc5-y4b8k', 'staging', 'Failed', false, 3)];
+  const deployment = (name, ns, count = 2) => resource('Deployment', name, ns, { replicas: count }, { readyReplicas: count, updatedReplicas: count, availableReplicas: count });
+  const events = [resource('Event', 'api-gateway-scaled', 'production', {}, {}, 3), resource('Event', 'frontend-pulled', 'production', {}, {}, 12), resource('Event', 'image-scheduled', 'staging', {}, {}, 26), resource('Event', 'notification-backoff', 'staging', {}, {}, 38)];
+  const messages = [['Scaled up replica set', 'api-gateway · 2 replicas available', 'Normal', 'ScalingReplicaSet'], ['Container image pulled', 'web-frontend · image is up to date', 'Normal', 'Pulled'], ['Pod assigned to node', 'image-processor · worker-eu-02', 'Normal', 'Scheduled'], ['Container restarting', 'notification-worker · back-off restarting container', 'Warning', 'BackOff']];
+  events.forEach((e, i) => Object.assign(e, { message: messages[i][1], type: messages[i][2], reason: messages[i][3], lastTimestamp: e.metadata.creationTimestamp, involvedObject: { name: messages[i][0] } }));
+  const data = {
+    pods, deployments: [deployment('api-gateway', 'production'), deployment('web-frontend', 'production'), deployment('payments-worker', 'production', 1), deployment('image-processor', 'staging', 1), deployment('notification-worker', 'staging', 1)],
+    statefulsets: [resource('StatefulSet', 'postgres-primary', 'production', { replicas: 1 }, { readyReplicas: 1 }), resource('StatefulSet', 'redis-cache', 'production', { replicas: 1 }, { readyReplicas: 1 })],
+    daemonsets: [resource('DaemonSet', 'node-exporter', 'observability', {}, { desiredNumberScheduled: 3, numberReady: 3 })],
+    jobs: [resource('Job', 'database-backup-28914300', 'production', { completions: 1 }, { succeeded: 1 })],
+    cronjobs: [resource('CronJob', 'database-backup', 'production', { schedule: '0 2 * * *', suspend: false }, { lastScheduleTime: ago(240) })],
+    services: [resource('Service', 'api-gateway', 'production', { type: 'ClusterIP', clusterIP: '10.96.42.18', ports: [{ port: 8080, protocol: 'TCP' }] }), resource('Service', 'web-frontend', 'production', { type: 'LoadBalancer', clusterIP: '10.96.28.5', ports: [{ port: 80, protocol: 'TCP' }] })],
+    ingresses: [resource('Ingress', 'web-ingress', 'production', { rules: [{ host: 'app.example.test' }] })],
+    configmaps: [resource('ConfigMap', 'api-config', 'production')],
+    persistentvolumeclaims: [resource('PersistentVolumeClaim', 'postgres-data', 'production', { resources: { requests: { storage: '50Gi' } }, storageClassName: 'standard' }, { phase: 'Bound' })],
+    nodes: ['worker-eu-01', 'worker-eu-02', 'worker-eu-03'].map(n => resource('Node', n, undefined, {}, { conditions: [{ type: 'Ready', status: 'True' }], capacity: { cpu: '4', memory: '16Gi' }, nodeInfo: { kubeletVersion: 'v1.33.4' } })),
+    namespaces: ['production', 'staging', 'observability', 'kube-system'].map(n => resource('Namespace', n, undefined, {}, { phase: 'Active' })), events,
+  };
+  data['widgets.example.test'] = [resource('Widget', 'demo-widget', 'production', { replicas: 2 }, { phase: 'Ready' })];
+  data.customresourcedefinitions = [resource('CustomResourceDefinition', 'widgets.example.test', undefined, { group: 'example.test', scope: 'Namespaced', names: { kind: 'Widget', plural: 'widgets' } })];
+  data.secrets = [{ ...resource('Secret', 'demo-connection', 'production'), type: 'Opaque', _dataKeys: ['username', 'password'] }];
+  data.storageclasses = [resource('StorageClass', 'standard', undefined)];
+  data.roles = [resource('Role', 'application-reader', 'production')];
+  data.horizontalpodautoscalers = [resource('HorizontalPodAutoscaler', 'api-gateway', 'production', { minReplicas: 2, maxReplicas: 6 }, { currentReplicas: 2, desiredReplicas: 2 })];
+  window.demoWorkspace = {
+    discovery() { return { resources: Object.entries(data).map(([key, rows]) => ({ key, title: rows[0]?.kind || key, kind: rows[0]?.kind || key, apiVersion: key.includes('.') ? 'example.test/v1' : 'v1', namespaced: Boolean(rows[0]?.metadata.namespace), verbs: ['get', 'list', 'watch'] })), warnings: [] }; },
+    metrics(namespace) { const items = pods.filter(p => namespace === '*' || p.metadata.namespace === namespace).map(p => ({ metadata: p.metadata, window: '30s', containers: [{ name: p.spec.containers[0].name, usage: { cpu: '125m', memory: '96Mi' } }] })); return { pods: { items }, nodes: { items: data.nodes.map(n => ({ metadata: n.metadata, window: '30s', usage: { cpu: '840m', memory: '2048Mi' } })) }, errors: [] }; },
+    helm() { return [{ name: 'prometheus', namespace: 'observability', revision: '3', updated: ago(90), status: 'deployed', chart: 'prometheus-27.0.0', app_version: '3.2.0' }]; },
+    contexts: { current: 'demo-eu-west', contexts: [{ name: 'demo-eu-west', cluster: 'Demo cluster', namespace: 'production' }, {name:'demo-us-east',cluster:'Demo cluster 2',namespace:'staging'}] },
+    list(kind, namespace) { return { items: (data[kind] || []).filter(r => namespace === '*' || !r.metadata.namespace || r.metadata.namespace === namespace) }; },
+    yaml(object) { if (object.kind === 'HelmRelease') return '# DEMO rendered release manifest\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: prometheus-config\n  namespace: observability\n'; return `# Demo manifest — changes are not sent to a cluster\napiVersion: ${object.apiVersion}\nkind: ${object.kind}\nmetadata:\n  name: ${object.metadata.name}\n${object.metadata.namespace ? `  namespace: ${object.metadata.namespace}\n` : ''}spec:\n${object.kind === 'Pod' ? `  containers:\n    - name: ${object.spec.containers[0].name}\n      image: ${object.spec.containers[0].image}\n` : '  # Resource configuration\n'}`; },
+  };
+})();
