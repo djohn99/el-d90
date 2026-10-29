@@ -6,7 +6,7 @@ const calls=()=>fs.existsSync(record)?fs.readFileSync(record,'utf8').trim().spli
 async function text(page,id,value){await page.locator(id).filter({hasText:value}).waitFor();}
 (async()=>{try{
  app=await _electron.launch({executablePath:process.env.EL_D90_APP_EXECUTABLE||require('electron'),args:process.env.EL_D90_APP_EXECUTABLE?[]:[root],cwd:root,env:{...process.env,ELECTRON_RUN_AS_NODE:'',EL_D90_USER_DATA:path.join(temp,'profile'),EL_D90_KUBECTL:path.join(__dirname,'mock-kubectl.cjs'),EL_D90_HELM:path.join(__dirname,'mock-helm.cjs'),EL_D90_TEST_METRIC_LABEL:'-2+3',EL_D90_TEST_METRIC_NEGATIVE:'1',EL_D90_TEST_RECORD:record}});
- const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
+ const page=await app.firstWindow();await page.setViewportSize({width:1460,height:940});page.on('pageerror',e=>errors.push(e.message));
  await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'});await page.locator('#context').selectOption('fixture-a');await page.locator('#overview-table tbody tr').first().waitFor();
  await page.locator('.nav-item[data-view="metrics"]').click();await page.locator('#history-source option[value="0"]').waitFor({state:'attached'});await page.locator('#history-source').selectOption('0');
  await text(page,'.history-status','');await page.locator('.history-chart-wrap svg').waitFor();assert.match(await page.locator('.history-summary').textContent(),/2 samples/);

@@ -5,7 +5,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpdir(),'eld90-node-ui-'));
 (async()=>{let app;try{
  app=await _electron.launch({executablePath:process.env.EL_D90_APP_EXECUTABLE||require('electron'),args:process.env.EL_D90_APP_EXECUTABLE?[]:[root],env:{...process.env,ELECTRON_RUN_AS_NODE:'',EL_D90_USER_DATA:profile,EL_D90_KUBECTL:path.join(root,'test/mock-kubectl.cjs')}});
- const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await app.firstWindow();await page.setViewportSize({width:1460,height:940});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await app.evaluate(({app,dialog,ipcMain})=>{
   const load=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/src/main.cjs');const n=load('./node-access.cjs');let records=[];global.nodeTest={ssh:0,debug:0,cleaned:0};
   dialog.showMessageBox=async()=>({response:1});

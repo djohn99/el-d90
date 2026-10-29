@@ -10,7 +10,7 @@ let application;
 const errors = [];
 async function launch(demo = false, failure = '') {
   application = await _electron.launch({ executablePath: process.env.EL_D90_APP_EXECUTABLE || require('electron'), args: [...(process.env.EL_D90_APP_EXECUTABLE ? [] : [root]), ...(demo ? ['--demo'] : [])], cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '', EL_D90_USER_DATA: path.join(temporary, 'profile-'+require('node:crypto').randomUUID()), EL_D90_TEST_FAILURE: failure, EL_D90_KUBECTL: path.join(__dirname, 'mock-kubectl.cjs'), EL_D90_HELM: path.join(__dirname,'mock-helm.cjs'), EL_D90_TEST_RECORD: record } });
-  const page = await application.firstWindow(); page.on('pageerror', e => errors.push(e.message)); return page;
+  const page = await application.firstWindow(); await page.setViewportSize({width:1460,height:940}); page.on('pageerror', e => errors.push(e.message)); return page;
 }
 async function chooseNamespaces(page,names) {
  await page.locator('#namespace-multi').click();const options=page.locator('#namespace-options input');for(let i=0;i<await options.count();i++)await options.nth(i).setChecked(names.includes(await options.nth(i).getAttribute('value')));await page.locator('#namespace-apply').click();

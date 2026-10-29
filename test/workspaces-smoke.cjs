@@ -39,7 +39,7 @@ const alive = pid => { try { process.kill(pid, 0); return true; } catch { return
 async function waitFor(predicate, timeout = 6000) { const end = Date.now() + timeout; while (!predicate()) { if (Date.now() > end) throw new Error('Workspace condition timed out'); await new Promise(r => setTimeout(r, 25)); } }
 async function launch(demo = false) {
   application = await _electron.launch({ executablePath: process.env.EL_D90_APP_EXECUTABLE || require('electron'), args: [...(process.env.EL_D90_APP_EXECUTABLE ? [] : [root]), ...(demo ? ['--demo'] : [])], cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '', EL_D90_USER_DATA: demo ? demoProfile : profile, EL_D90_KUBECTL: mock, EL_D90_TEST_RECORD: record, EL_D90_DELAY_MARKER: delayMarker } });
-  const page = await application.firstWindow();
+  const page = await application.firstWindow(); await page.setViewportSize({width:1460,height:940});
   page.on('pageerror', e => errors.push(e.message));
   page.on('dialog', dialog => dialog.accept());
   return page;
