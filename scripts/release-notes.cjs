@@ -1,8 +1,11 @@
 const version=require('../package.json').version;
 if(!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)||process.env.VERSION!==version)throw Error('Release notes version mismatch');
+const fs=require('node:fs'),path=require('node:path');
+const highlightsFile=path.join(__dirname,'../docs/releases',version+'.md');
+const highlights=fs.existsSync(highlightsFile)?fs.readFileSync(highlightsFile,'utf8').trim()+'\n\n':'';
 console.log(`Created and maintained by **[David John (@djohn99)](https://github.com/djohn99)**.
 
-## Install on Apple Silicon
+${highlights}## Install on Apple Silicon
 
 1. Download **el-d90-${version}-mac-arm64.dmg** below.
 2. Open it and drag **el-d90** into **Applications**.
