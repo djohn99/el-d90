@@ -201,7 +201,7 @@ Original project source and visual identity are MIT licensed. Dependencies retai
 
 **David John ([@djohn99](https://github.com/djohn99))** created and maintains el-d90. The repository is owned by `djohn99`, original source carries David John’s MIT copyright, and future packaged builds show the author credit in **el-d90 → About**.
 
-Download official builds from [this repository’s Releases](https://github.com/djohn99/el-d90/releases). Releases produced by the automated workflow include GitHub build-provenance attestations linking the DMG to this repository, its commit and its workflow. Verify a downloaded automated build with `gh attestation verify <downloaded-file.dmg> --repo djohn99/el-d90`. The manually published 0.5.1 release predates this workflow and has no attestation. An attestation establishes build origin; it is separate from Apple Developer ID signing and notarization.
+Download official builds from [this repository’s Releases](https://github.com/djohn99/el-d90/releases). Releases produced by the automated workflow include GitHub build-provenance attestations linking the DMG to this repository, its commit and its workflow. Verify a downloaded automated build with `gh attestation verify <downloaded-file.dmg> --repo djohn99/el-d90`. The manually published 0.5.1 and 0.5.2 installers have no GitHub attestation. The 0.5.2 installer was built and verified locally from tag `v0.5.2` after the GitHub macOS job remained queued; its SHA-256 checksum is included with the release. An attestation establishes build origin; it is separate from Apple Developer ID signing and notarization.
 
 ## Automated releases
 
