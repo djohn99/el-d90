@@ -53,3 +53,14 @@ test('large series responses are bounded and report selection truncation',async(
  kube.run=async()=>JSON.stringify({status:'success',warnings:['partial remote read'],data:{resultType:'matrix',result:Array.from({length:25},(_,i)=>({metric:{namespace:'ns-'+i},values:[]}))}});
  const result=await history.query(input);assert.equal(result.series.length,20);assert.match(result.errors.join(' '),/partial remote read/);assert.match(result.errors.join(' '),/20 namespace series/);
 });
+test('short presets and custom absolute windows reach Prometheus with bounded resolution',()=>{
+ const now=1_800_000_000_000;
+ for(const[range,seconds]of Object.entries({'5m':300,'30m':1800,'2h':7200,'4h':14400})){const plan=history.plan({...input,range},now);assert.equal(plan.end-plan.start,seconds);assert.ok(seconds/plan.step<=500);}
+ const customStart=now/1000-7200,customEnd=now/1000-1800,plan=history.plan({...input,range:'custom',customStart,customEnd},now),url=new URL('https://kube.invalid'+plan.path);
+ assert.equal(Number(url.searchParams.get('start')),customStart);assert.equal(Number(url.searchParams.get('end')),customEnd);assert.ok((plan.end-plan.start)/plan.step<=480);
+ const month=history.plan({...input,range:'custom',customStart:customEnd-31*86400,customEnd},now);assert.ok((month.end-month.start)/month.step<=480);
+});
+test('custom windows reject missing, inverted, future, too short and oversized ranges',()=>{
+ const now=1_800_000_000_000,end=now/1000-60,base={...input,range:'custom',customStart:end-3600,customEnd:end};
+ for(const bad of [{customStart:undefined},{customEnd:NaN},{customEnd:String(end)},{customEnd:base.customStart},{customStart:end-30},{customEnd:now/1000+1},{customStart:end-32*86400}])assert.throws(()=>history.plan({...base,...bad},now));
+});

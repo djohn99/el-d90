@@ -13,7 +13,7 @@ async function launch(demo = false, failure = '') {
   const page = await application.firstWindow(); await page.setViewportSize({width:1460,height:940}); page.on('pageerror', e => errors.push(e.message)); return page;
 }
 async function chooseNamespaces(page,names) {
- await page.locator('#namespace-multi').click();const options=page.locator('#namespace-options input');for(let i=0;i<await options.count();i++)await options.nth(i).setChecked(names.includes(await options.nth(i).getAttribute('value')));await page.locator('#namespace-apply').click();
+ await page.locator('#namespace-multi').click();const options=page.locator('#namespace-options input');for(let i=0;i<await options.count();i++)await options.nth(i).setChecked(names.includes(await options.nth(i).getAttribute('value')));await page.locator('#namespace-done').click();
 }
 async function expectText(page, selector, text) { await page.locator(selector).filter({ hasText: text }).waitFor(); }
 async function waitFor(fn, timeout = 4000) { const end = Date.now() + timeout; while (!fn()) { if (Date.now() > end) throw new Error('Condition timed out'); await new Promise(r => setTimeout(r, 40)); } }

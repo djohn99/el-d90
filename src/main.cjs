@@ -14,6 +14,15 @@ const resourceEvents=require('./events.cjs');
 const{Sessions}=require('./sessions.cjs');
 const topology=require('./topology.cjs');
 const editor=require('./editor.cjs');
+const settingsStore=require('./settings.cjs');
+const nodeTable=require('./node-table.cjs');
+const clusterResources=require('./cluster-resources.cjs');
+const workloadMetrics=require('./workload-metrics.cjs');
+const resourceHistory=require('./resource-history.cjs');
+const workspaceTools=require('./workspace-tools.cjs'),releaseTools=require('./release-tools.cjs'),readRequests=require('./read-requests.cjs');
+const{WorkspacePolicy}=require('./workspace-policy.cjs');
+let appliedSettings=settingsStore.defaults(),settingsError='';
+const settingsPath=()=>path.join(app.getPath('userData'),'settings.yaml');
 const {Watches}=require('./watches.cjs');
 const watchSend=(channel,value)=>{if(window&&!window.webContents.isDestroyed())window.webContents.send(channel,value);};
 const watches=new Watches({onEvent:value=>watchSend('watch:event',value),onStatus:value=>watchSend('watch:status',value)});
@@ -34,14 +43,19 @@ let window;
 app.setName('el-d90');
 // Keep the existing local profile when upgrading from Harbor.
 app.setPath('userData', process.env.EL_D90_USER_DATA || path.join(app.getPath('appData'), 'Harbor'));
+const workspacePolicy=new WorkspacePolicy(path.join(app.getPath('userData'),'workspace-safeguards.json'));
 function trusted(event) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== index) throw new Error('Untrusted request');
 }
 function handle(channel, fn) {
   ipcMain.handle(channel, async (event, input = {}) => {
     trusted(event);
-    if (demo && !['app:info', 'file:save','editor:parse','editor:format','editor:diff'].includes(channel)) throw new Error('Demo mode is disconnected from Kubernetes');
-    return fn(input, event);
+    if (demo && !['workspace:state','workspace:policy-set','read:cancel','release:check','release:open','file:save-image','settings:get','settings:appearance-draft','settings:save','settings:pick-kubeconfig','app:restart','app:info', 'file:save','editor:parse','editor:format','editor:diff'].includes(channel)) throw new Error('Demo mode is disconnected from Kubernetes');
+    const ownedContext=channel==='session:write'?sessions.entries.get(input.id)?.context:channel==='terminal:write'?streams.get(input.id)?.context:null;
+    const request=ownedContext?{...input,context:ownedContext}:input;
+    await workspacePolicy.assertAllowed(channel,request);
+    let result;try{result=await(readRequests.READS.has(channel)?readRequests.execute(request,()=>fn(request,event)):fn(request,event));}catch(error){await workspacePolicy.record(channel,request,null,error).catch(()=>{});throw error;}
+    await workspacePolicy.record(channel,request,result).catch(()=>{if(result&&typeof result==='object')result.auditWarning='The operation completed, but local change history could not be saved.';});return result;
   });
 }
 async function stop(id) {
@@ -65,9 +79,25 @@ function startStream(args, type, event, context, options={}) {
   child.stdin.on('error', () => {});if(type==='terminal')child.stdio[3].on('error',()=>{});
   return id;
 }
+handle('read:cancel',readRequests.cancel);
+handle('workspace:issues',workspaceTools.issues);
+handle('workspace:search',workspaceTools.search);
+handle('workspace:permissions',workspaceTools.permissions);
+handle('workspace:monitoring',workspaceTools.monitoring);
+handle('workspace:state',input=>workspacePolicy.state(kube.string(input.context,'context')));
+handle('workspace:policy-set',async input=>{const context=kube.string(input.context,'context'),previous=await workspacePolicy.state(context);if(previous.policy.readOnly&&!input.readOnly){const choice=await dialog.showMessageBox(window,{type:'warning',buttons:['Keep read-only','Allow changes'],defaultId:0,cancelId:0,message:'Disable read-only mode?',detail:'Context: '+context+'\nCluster-changing actions and interactive sessions will become available.'});if(choice.response!==1)return{...previous,cancelled:true};}return workspacePolicy.set(context,input);});
+handle('release:check',()=>releaseTools.check(app.getVersion()));
+handle('release:dependencies',()=>releaseTools.dependencies());
+handle('release:open',input=>require('electron').shell.openExternal(releaseTools.releaseUrl(input.url)));
+handle('file:save-image',async input=>{if(typeof input.data!=='string'||input.data.length>12*1024*1024||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(input.data))throw Error('Invalid PNG export');const buffer=Buffer.from(input.data.split(',')[1],'base64');if(buffer.length>8*1024*1024||buffer.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('Invalid PNG export');const target=await dialog.showSaveDialog(window,{defaultPath:'el-d90-chart.png',filters:[{name:'PNG image',extensions:['png']}]});if(!target.canceled&&target.filePath)await fs.writeFile(target.filePath,buffer);return!target.canceled;});
 handle('watch:start',input=>watches.start(input));
 handle('watch:stop',input=>{watches.stop(input.id);return true;});
 handle('watch:status',()=>watches.status());
+handle('settings:get',async()=>({settings:await settingsStore.read(settingsPath()).catch(()=>appliedSettings),yaml:settingsStore.stringify(await settingsStore.read(settingsPath()).catch(()=>appliedSettings)),path:settingsPath(),error:settingsError}));
+handle('settings:appearance-draft',input=>{const value=settingsStore.parse(input.yaml);if(input.resetColors){if(!['dark','light'].includes(input.colorMode))throw Error('Choose a color mode');if(value.appearance.colors)delete value.appearance.colors[input.colorMode];}else{const patch=input.appearance;if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Appearance must be a mapping');const colors=patch.colors;Object.assign(value.appearance,{...patch,colors:value.appearance.colors});if(colors){value.appearance.colors={...value.appearance.colors};for(const[mode,palette]of Object.entries(colors))value.appearance.colors[mode]={...value.appearance.colors[mode],...palette};}if(value.appearance.colors===undefined)delete value.appearance.colors;}const settings=settingsStore.normalize(value);return{settings,yaml:settingsStore.stringify(settings)};});
+handle('settings:save',async input=>{const saved=await settingsStore.write(settingsPath(),input.yaml);const restartRequired=JSON.stringify(saved.kubeconfig)!==JSON.stringify(appliedSettings.kubeconfig);settingsError='';return{settings:saved,yaml:settingsStore.stringify(saved),restartRequired};});
+handle('settings:pick-kubeconfig',async()=>{const result=await dialog.showOpenDialog(window,{title:'Choose kubeconfig files',properties:['openFile','multiSelections','showHiddenFiles']});return{cancelled:result.canceled,paths:result.filePaths};});
+handle('app:restart',()=>{if(sessions.entries.size||nodePending.size||nodes.active().length||helmOperations.size||streams.size)throw Error('Close active terminal, log, node and Helm sessions before restarting.');app.relaunch();app.quit();return true;});
 handle('topology:snapshot',topology.snapshot);
 handle('topology:api',topology.apiInspection);
 handle('editor:parse',editor.parseDocuments);
@@ -77,8 +107,8 @@ handle('editor:explain',editor.explain);
 handle('editor:schema',editor.schema);
 handle('node:discover',nodes.discover);
 handle('node:sessions',input=>({warnings:nodeCleanupErrors.has('journal')?[nodeCleanupErrors.get('journal')]:[],pending:[...nodePending.values()].filter(v=>v.context===input.context),debug:nodes.active().filter(v=>v.context===input.context).map(v=>({...v,cleanupError:nodeCleanupErrors.get(v.sessionToken)||null})),ssh:[...streams.entries()].filter(([,v])=>v.metadata?.transport==='ssh'&&v.context===input.context).map(([id,v])=>({id,...v.metadata}))}));
-handle('node:ssh-start',async(input,event)=>{const request=nodes.validateSSH(input);const choice=await dialog.showMessageBox(window,{type:'question',buttons:['Cancel','Connect SSH'],defaultId:0,cancelId:0,message:request.confirmation.title,detail:request.confirmation.detail});if(choice.response!==1)return {cancelled:true};for(const[id,s]of streams)if(s.type==='terminal'&&s.context===input.context)await stop(id);const id=startStream(request.args,'terminal',event,input.context,{command:request.command,metadata:{transport:'ssh',context:request.context,nodeName:request.nodeName,host:request.host}});return{id,transport:'ssh',nodeName:request.nodeName};});
-handle('node:debug-start',async(input,event)=>{const request=nodes.validateDebug(input);const choice=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Create privileged debug Pod'],defaultId:0,cancelId:0,message:request.confirmation.title,detail:request.confirmation.detail});if(choice.response!==1)return{cancelled:true};const pendingId=randomUUID();nodePending.set(pendingId,{...request,startedAt:new Date().toISOString()});let record;try{record=await nodes.createDebug(input,{onCreated:()=>saveDebugJournal()});await saveDebugJournal();for(const[id,s]of streams)if(s.type==='terminal'&&s.context===input.context)await stop(id);const id=startStream(nodes.terminalArgs(record),'terminal',event,input.context,{cleanup:()=>cleanDebug(record),metadata:{transport:'debug',nodeName:record.nodeName,podName:record.podName,namespace:record.namespace}});return{id,transport:'debug',nodeName:record.nodeName,podName:record.podName,namespace:record.namespace};}catch(e){if(record)await cleanDebug(record);await saveDebugJournal().catch(()=>{});throw e;}finally{nodePending.delete(pendingId);}});
+handle('node:ssh-start',async(input,event)=>{const request=nodes.validateSSH(input);const choice=await dialog.showMessageBox(window,{type:'question',buttons:['Cancel','Connect SSH'],defaultId:0,cancelId:0,message:request.confirmation.title,detail:request.confirmation.detail});if(choice.response!==1)return {cancelled:true};await workspacePolicy.assertAllowed('node:ssh-start',input);for(const[id,s]of streams)if(s.type==='terminal'&&s.context===input.context)await stop(id);const id=startStream(request.args,'terminal',event,input.context,{command:request.command,metadata:{transport:'ssh',context:request.context,nodeName:request.nodeName,host:request.host}});return{id,transport:'ssh',nodeName:request.nodeName};});
+handle('node:debug-start',async(input,event)=>{const request=nodes.validateDebug(input);const choice=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Create privileged debug Pod'],defaultId:0,cancelId:0,message:request.confirmation.title,detail:request.confirmation.detail});if(choice.response!==1)return{cancelled:true};await workspacePolicy.assertAllowed('node:debug-start',input);const pendingId=randomUUID();nodePending.set(pendingId,{...request,startedAt:new Date().toISOString()});let record;try{record=await nodes.createDebug(input,{onCreated:()=>saveDebugJournal()});await saveDebugJournal();for(const[id,s]of streams)if(s.type==='terminal'&&s.context===input.context)await stop(id);const id=startStream(nodes.terminalArgs(record),'terminal',event,input.context,{cleanup:()=>cleanDebug(record),metadata:{transport:'debug',nodeName:record.nodeName,podName:record.podName,namespace:record.namespace}});return{id,transport:'debug',nodeName:record.nodeName,podName:record.podName,namespace:record.namespace};}catch(e){if(record)await cleanDebug(record);await saveDebugJournal().catch(()=>{});throw e;}finally{nodePending.delete(pendingId);}});
 handle('node:debug-cleanup',async input=>{const record=nodes.active().find(v=>v.sessionToken===input.sessionToken&&v.context===input.context);if(!record)throw new Error('Owned debug session not found');const result=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Clean up owned debug Pod'],defaultId:0,cancelId:0,message:`Remove ${record.podName}?`,detail:`Context: ${record.context}\nNamespace: ${record.namespace}\nOnly the recorded Pod UID and ownership labels can be removed.`});if(result.response!==1)return{cancelled:true};for(const[id,s]of streams)if(s.context===record.context&&s.metadata?.podName===record.podName)await stop(id);return nodes.active().some(v=>v.sessionToken===record.sessionToken)?cleanDebug(record):{removed:true};});
 handle('app:info', () => ({ demo, version: app.getVersion(), platform: process.platform }));
 handle('kube:contexts', kube.contexts);
@@ -91,7 +121,7 @@ handle('resource:action', async input => {
   const operation=actions.validate(input);
   if(operation.confirmation.typedName && input.confirmName!==operation.confirmation.typedName)throw new Error('Type the exact resource name to confirm this action');
   const result=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Confirm '+operation.action],defaultId:0,cancelId:0,message:operation.confirmation.title,detail:`Context: ${operation.context}\nNamespace: ${operation.namespace || 'cluster scoped'}\n${operation.confirmation.impact}`});
-  return result.response===1 ? actions.perform(input):{cancelled:true};
+  if(result.response!==1)return{cancelled:true};await workspacePolicy.assertAllowed('resource:action',input);return actions.perform(input);
 });
 for(const [channel,fn] of Object.entries({'helm:repos':helm.repos,'helm:search':helm.search,'helm:versions':helm.versions,'helm:values':helm.values,'helm:release-values':helm.releaseValues,'helm:history':helm.history,'helm:preview':helm.preview}))handle(channel,fn);
 async function confirmHelm(input, operation, fn) {
@@ -99,6 +129,7 @@ async function confirmHelm(input, operation, fn) {
   if(helmOperations.has(key))throw new Error('An operation is already running for this release');
   const choice=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Confirm '+operation],defaultId:0,cancelId:0,message:`${operation} ${input.name}?`,detail:`Context: ${input.context}\nNamespace: ${input.namespace}${input.chart?'\nChart: '+input.chart+' '+input.version:''}${input.revision?'\nRevision: '+input.revision:''}\nThis changes resources on the selected cluster.`});
   if(choice.response!==1)return {cancelled:true};
+  await workspacePolicy.assertAllowed('helm:perform',input);
   if(helmOperations.has(key))throw new Error('An operation is already running for this release');
   helmOperations.add(key);const job={id:randomUUID(),context:input.context,namespace:input.namespace,name:input.name,operation,state:'running',startedAt:new Date().toISOString()};helmOperationResults.set(job.id,job);try{const result=await fn(input);job.state='completed';job.output=String(result.output||'Completed').slice(-24000);return result;}catch(e){job.state='failed';job.output=e.message;throw e;}finally{job.endedAt=new Date().toISOString();helmOperations.delete(key);for(const [id,old] of helmOperationResults)if(helmOperationResults.size>100&&old.state!=='running')helmOperationResults.delete(id);}
 }
@@ -111,6 +142,11 @@ handle('helm:repo-update',async()=>{const choice=await dialog.showMessageBox(win
 
 handle('kube:discover', kube.discover);
 handle('kube:metrics', kube.metrics);
+handle('nodes:table-data',nodeTable.extras);
+handle('cluster:resources',clusterResources.snapshot);
+handle('deployments:metrics',workloadMetrics.snapshot);
+handle('resource:history',resourceHistory.query);
+handle('pods:table-data',nodeTable.podExtras);
 handle('helm:list', kube.helmList);
 handle('helm:manifest', kube.helmManifest);
 handle('forward:start', input => forwards.start(input));
@@ -128,12 +164,12 @@ handle('kube:validate', input => kube.apply(input, true));
 handle('kube:action', async input => {
   const args = kube.actionArgs(input);
   const result = await dialog.showMessageBox(window, { type: 'warning', buttons: ['Cancel', input.action === 'scale' ? 'Scale workload' : 'Restart workload'], defaultId: 0, cancelId: 0, message: `${input.action === 'scale' ? 'Scale' : 'Restart'} ${input.name}?`, detail: `Context: ${input.context}\nNamespace: ${input.namespace}${input.action === 'scale' ? `\nDesired replicas: ${input.replicas}` : ''}` });
-  return result.response === 1 ? { output: await kube.run(args) } : { cancelled: true };
+  if(result.response!==1)return{cancelled:true};await workspacePolicy.assertAllowed('kube:action',input);return{output:await kube.run(args)};
 });
 handle('kube:apply', async input => {
   const choice = await dialog.showMessageBox(window, { type: 'warning', buttons: ['Cancel', 'Apply changes'], defaultId: 0, cancelId: 0, message: `Apply YAML to ${kube.string(input.context, 'context')}?`, detail: `Namespace scope: ${input.namespace === '*' ? 'defined in YAML' : input.namespace || 'defined in YAML'}. This changes resources on the cluster.` });
   if (choice.response !== 1) return { cancelled: true };
-  return { output: await kube.apply(input, false) };
+  await workspacePolicy.assertAllowed('kube:apply',input);return { output: await kube.apply(input, false) };
 });
 handle('logs:start', (input,event)=>{
   if(input.resource!=='deployments'){
@@ -176,6 +212,7 @@ async function createWindow() {
   await window.loadFile(path.join(__dirname, 'index.html'));
 }
 app.whenReady().then(async () => {
+  try{appliedSettings=await settingsStore.read(settingsPath());kube.setKubeconfigPaths(settingsStore.resolvePaths(appliedSettings));}catch(e){settingsError='Settings could not be loaded: '+e.message;}
   app.setAboutPanelOptions({applicationName:'el-d90',applicationVersion:app.getVersion(),copyright:'Copyright © 2026 David John',credits:'Created and maintained by David John (@djohn99).\nhttps://github.com/djohn99/el-d90'});
   try{const records=JSON.parse(await fs.readFile(journalPath(),'utf8'));nodes.restoreOwned(records);}catch(e){if(e.code!=='ENOENT')nodeCleanupErrors.set('journal','Debug recovery metadata could not be loaded: '+e.message);}
   Menu.setApplicationMenu(Menu.buildFromTemplate([

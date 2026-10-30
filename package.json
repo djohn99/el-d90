@@ -1,7 +1,7 @@
 {
   "name": "el-d90",
   "productName": "el-d90",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Your local Kubernetes workspace",
   "author": "David John",
   "license": "MIT",
@@ -21,12 +21,18 @@
     "pretest": "npm run build:native",
     "test:workspaces": "node test/workspaces-smoke.cjs",
     "test:helm-history": "node test/helm-history-smoke.cjs",
-    "test:desktop-all": "npm run test:desktop && npm run test:workspaces && npm run test:helm-history && npm run test:node-access && npm run test:events && npm run test:scaling && npm run test:sessions",
+    "test:desktop-all": "npm run test:desktop && npm run test:workspaces && npm run test:helm-history && npm run test:node-access && npm run test:events && npm run test:scaling && npm run test:sessions && npm run test:display-map && npm run test:smart-palette && npm run test:columns && npm run test:cluster-dashboard && npm run test:workspace-tools && npm run test:dismissal",
     "test:node-access": "node test/node-access-smoke.cjs",
     "test:events": "node test/events-smoke.cjs",
     "test:scaling": "node test/scaling-smoke.cjs",
     "test:all": "npm test && npm run test:desktop-all",
-    "test:sessions": "node test/sessions-smoke.cjs"
+    "test:sessions": "node test/sessions-smoke.cjs",
+    "test:display-map": "node test/display-map-smoke.cjs",
+    "test:smart-palette": "node test/smart-palette-smoke.cjs",
+    "test:columns": "node test/columns-smoke.cjs",
+    "test:cluster-dashboard": "node test/cluster-dashboard-smoke.cjs",
+    "test:workspace-tools": "node test/workspace-tools-smoke.cjs",
+    "test:dismissal": "node test/dismissal-smoke.cjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

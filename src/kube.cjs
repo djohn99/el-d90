@@ -42,6 +42,8 @@ function string(value, label, max = 1024) {
   return value;
 }
 const catalogues = new Map();
+const pendingLists = new Map();
+const readRequests=require('./read-requests.cjs');
 function definition(value, context) { return catalogues.get(context)?.get(value) || (Object.hasOwn(RESOURCES, value) ? RESOURCES[value] : undefined); }
 function resource(value, context) {
   if (typeof value !== 'string' || !/^[a-z][a-z0-9.-]*$/.test(value) || !definition(value, context)) throw new Error('Unsupported resource');
@@ -61,17 +63,20 @@ function scope(input, kind, requireNamespace = false) {
   }
   return args;
 }
+let configuredKubeconfigPaths=[];
+function setKubeconfigPaths(paths){configuredKubeconfigPaths=[...paths];catalogues.clear();pendingLists.clear();}
 function environment() {
-  return { ...process.env, PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(process.env.PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(':') };
+  return { ...process.env, ...(configuredKubeconfigPaths.length?{KUBECONFIG:configuredKubeconfigPaths.join(path.delimiter)}:{}), PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(process.env.PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(':') };
 }
 function executable() {
   const candidates = [process.env.EL_D90_KUBECTL || process.env.HARBOR_KUBECTL, ...environment().PATH.split(':').map(p => path.join(p, 'kubectl'))].filter(Boolean);
   for (const p of candidates) { try { fs.accessSync(p, fs.constants.X_OK); return p; } catch {} }
   throw new Error('kubectl was not found. Install kubectl or launch el-d90 with EL_D90_KUBECTL=/absolute/path/to/kubectl.');
 }
-function run(args, { input, timeout = 30000, binary = executable(), captureStatus = false } = {}) {
+function run(args, { input, timeout = 30000, binary = executable(), captureStatus = false, signal=readRequests.signal() } = {}) {
+  if(!['get','api-resources','version','explain','auth'].includes(args[0])&&!(args[0]==='config'&&args[1]==='view'))pendingLists.clear();
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { env: environment(), shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(binary, args, { env: environment(), shell: false, stdio: ['pipe', 'pipe', 'pipe'], ...(signal?{signal}:{}) });
     let stdout = '', stderr = '', failure;
     const timer = setTimeout(() => { failure = new Error('Request timed out. Check your cluster connection and authentication.'); child.kill('SIGKILL'); }, timeout);
     function append(chunk, error) {
@@ -97,19 +102,35 @@ function selectedNamespaces(input) {
   }
   return input.namespace && input.namespace !== '*' ? [name(input.namespace, 'namespace')] : [];
 }
+const LIST_VERSIONS={deployments:'apps/v1',statefulsets:'apps/v1',daemonsets:'apps/v1',replicasets:'apps/v1',jobs:'batch/v1',cronjobs:'batch/v1',horizontalpodautoscalers:'autoscaling/v2',poddisruptionbudgets:'policy/v1',ingresses:'networking.k8s.io/v1',networkpolicies:'networking.k8s.io/v1',endpointslices:'discovery.k8s.io/v1',storageclasses:'storage.k8s.io/v1',roles:'rbac.authorization.k8s.io/v1',rolebindings:'rbac.authorization.k8s.io/v1',clusterroles:'rbac.authorization.k8s.io/v1',clusterrolebindings:'rbac.authorization.k8s.io/v1',customresourcedefinitions:'apiextensions.k8s.io/v1'};
+function listPath(input,kind){const def=definition(kind,input.context),apiVersion=def?.apiVersion||LIST_VERSIONS[kind]||'v1';if(!/^[a-zA-Z0-9.-]+(?:\/[a-zA-Z0-9]+)?$/.test(apiVersion))throw Error('Invalid discovered API version');const base=apiVersion.includes('/')?'/apis/'+apiVersion:'/api/'+apiVersion;return base+(def.namespaced&&input.namespace&&input.namespace!=='*'?'/namespaces/'+encodeURIComponent(name(input.namespace,'namespace')):'')+'/'+kind.split('.')[0];}
+function listObject(item,kind){if(kind==='secrets'||kind.startsWith('secrets.'))return{apiVersion:item.apiVersion,kind:item.kind,type:item.type,metadata:Object.fromEntries(['name','namespace','uid','creationTimestamp'].filter(key=>typeof item.metadata?.[key]==='string').map(key=>[key,item.metadata[key]])),dataKeys:Object.keys(item.data||{})};if(item.metadata)delete item.metadata.managedFields;return item;}
+async function pagedList(input,kind,request=run){
+ const endpoint=listPath(input,kind),items=[],seen=new Set();let token='',limit=100,bytes=0,pages=0;
+ do{
+  const query=new URLSearchParams({limit:String(limit)});if(token)query.set('continue',token);let page;
+  try{page=JSON.parse(await request(['get','--raw',endpoint+'?'+query,'--context',string(input.context,'context'),'--request-timeout=20s']));}catch(e){if(/Response exceeds 24 MB/.test(e.message)&&limit>1){limit=Math.max(1,Math.floor(limit/5));continue;}throw e;}
+  if(!Array.isArray(page.items))throw Error('Kubernetes returned an invalid resource page');
+  for(const raw of page.items){const item={apiVersion:page.apiVersion||definition(kind,input.context)?.apiVersion||LIST_VERSIONS[kind]||'v1',kind:definition(kind,input.context)?.kind||(page.kind?.endsWith('List')?page.kind.slice(0,-4):undefined),...raw};const value=(kind==='secrets'||kind.startsWith('secrets.'))?item:listObject(item,kind);bytes+=Buffer.byteLength(JSON.stringify(value));if(bytes>128*1024*1024||items.length>=50000)throw Error('Resource list exceeds 128 MiB or 50,000 resources. Select namespaces to reduce the list.');items.push(value);}
+  token=page.metadata?.continue||'';if(typeof token!=='string'||token.length>65536)throw Error('Invalid Kubernetes continuation token');if(token&&seen.has(token))throw Error('Kubernetes repeated a resource continuation token');seen.add(token);if(++pages>10000)throw Error('Resource pagination exceeded 10,000 pages. Select namespaces to reduce the list.');if(!token)break;
+ }while(true);return{items};
+}
+async function listScope(input,kind){try{return JSON.parse(await run(['get',kind,...scope(input,kind),'-o','json']));}catch(e){if(!/Response exceeds 24 MB/.test(e.message))throw e;return pagedList(input,kind);}}
 async function list(input) {
   const kind = resource(input.resource, input.context);
   const namespaces = selectedNamespaces(input);
   const scopes = definition(kind, input.context).namespaced && namespaces.length ? namespaces : [input.namespace || '*'];
-  const results = await Promise.allSettled(scopes.map(namespace => run(['get', kind, ...scope({ ...input, namespace }, kind), '-o', 'json']).then(JSON.parse)));
+  const key=JSON.stringify([string(input.context,'context'),kind,[...scopes].sort(),configuredKubeconfigPaths,environment().KUBECONFIG||'',executable(),readRequests.key()]),pending=pendingLists.get(key);
+  if(pending&&Date.now()-pending.started<100)return structuredClone(await pending.promise);
+  const entry={started:Date.now(),promise:listSnapshot(input,kind,scopes)};pendingLists.set(key,entry);
+  try{return await entry.promise;}finally{if(pendingLists.get(key)===entry)pendingLists.delete(key);}
+}
+async function listSnapshot(input,kind,scopes){
+  const results = await Promise.allSettled(scopes.map(namespace => listScope({ ...input, namespace },kind)));
   const successful = results.filter(r => r.status === 'fulfilled');
   if (!successful.length) throw new Error(results.map((r,i) => `${scopes[i]}: ${r.reason.message}`).join('\n'));
   const data = { apiVersion: 'v1', kind: 'List', items: successful.flatMap(r => r.value.items || []), warnings: results.flatMap((r,i) => r.status === 'rejected' ? [`${scopes[i]}: ${r.reason.message}`] : []) };
-  if (kind === 'secrets' || kind.startsWith('secrets.')) data.items = data.items.map(item => ({
-    apiVersion: item.apiVersion, kind: item.kind, type: item.type,
-    metadata: Object.fromEntries(['name','namespace','uid','creationTimestamp'].filter(key => typeof item.metadata?.[key] === 'string').map(key => [key,item.metadata[key]])),
-    dataKeys: Object.keys(item.data || {}),
-  }));
+  data.items=data.items.map(item=>listObject(item,kind));
   return data;
 }
 async function yaml(input) {
@@ -215,4 +236,4 @@ function forwardArgs(input) {
   for (const port of [input.localPort, input.remotePort]) if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Ports must be integers between 1 and 65535');
   return ['port-forward', input.resource + '/' + name(input.name), input.localPort + ':' + input.remotePort, ...scope(input, input.resource, true).filter(arg => !arg.startsWith('--request-timeout=')), '--address=127.0.0.1'];
 }
-module.exports = { RESOURCES, string, name, resource, scope, environment, executable, run, contexts, list, yaml, apply, logArgs, terminalArgs, parseDiscovery, discover, metrics, helmList, helmManifest, actionArgs, forwardArgs, selectedNamespaces, findHelm };
+module.exports = { pagedList, listPath, setKubeconfigPaths, RESOURCES, string, name, resource, scope, environment, executable, run, contexts, list, yaml, apply, logArgs, terminalArgs, parseDiscovery, discover, metrics, helmList, helmManifest, actionArgs, forwardArgs, selectedNamespaces, findHelm };

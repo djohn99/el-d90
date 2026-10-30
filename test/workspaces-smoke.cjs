@@ -59,7 +59,7 @@ async function namespaces(page, names) {
   await page.locator('#namespace-multi').click();
   const inputs = page.locator('#namespace-options input');
   for (let i = 0; i < await inputs.count(); i++) await inputs.nth(i).setChecked(names.includes(await inputs.nth(i).getAttribute('value')));
-  await page.locator('#namespace-apply').click();
+  await page.locator('#namespace-done').click();
   await page.locator('#namespace-popover').waitFor({ state: 'hidden' });
   await page.locator('#busy').waitFor({ state: 'hidden' });
 }
@@ -135,6 +135,7 @@ async function text(page, selector, value) { await page.locator(selector).filter
     assert.equal(await page.locator('#resource-table').textContent().then(t => t.includes('pod-a')), false);
     fs.unlinkSync(delayMarker);
     await application.close(); application = null;
+    const restartOffset=calls().length;
     page = await launch();
     await page.locator('.cluster-tab-select[data-context="fixture-a"]').waitFor();
     await page.locator('.cluster-tab-select[data-context="fixture-b"][aria-selected="true"]').waitFor();
@@ -142,6 +143,18 @@ async function text(page, selector, value) { await page.locator(selector).filter
     assert.equal(await page.locator('#namespace').inputValue(), '__multiple__');
     assert.match(await page.locator('#page-title').textContent(), /Deployments/);
     console.log('PASS: stale responses stay in their owning workspace and live workspace preferences restore after restart');
+    await page.waitForFunction(()=>state.initialized&&!state.loading&&state.context==='fixture-b');
+    const restartCalls=calls().slice(restartOffset);
+    assert.equal(restartCalls.some(c=>c.context==='fixture-a'&&['get','api-resources'].includes(c.args[0])),false,'Startup must not block on loading inactive cluster tabs');
+    assert.equal(restartCalls.some(c=>c.args[0]==='get'&&['nodes','events'].includes(c.args[1])),false,'Restoring Deployments must not fetch an unused Overview');
+    assert.equal(restartCalls.filter(c=>c.context==='fixture-b'&&c.args[0]==='get'&&c.args[1]==='deployments').length,2,'Concurrent table/metrics requests share one Deployment list per namespace');
+    await tab(page,'fixture-a');await page.waitForFunction(()=>state.initialized&&!state.loading&&state.context==='fixture-a');assert.match(await page.locator('#page-title').textContent(),/Pods/);
+    await page.evaluate(async()=>{const host=document.createElement('div');document.body.append(host);const calls=[],source={namespace:'monitoring',name:'prometheus',port:9090},invoke=async(channel,input)=>{if(channel==='history:sources'){calls.push(input.context);return[source];}const end=Math.floor(Date.now()/1000);return{metric:'cpu',unit:'cores',start:end-3600,end,step:15,series:[{name:'Usage',values:[[end,1]]}],errors:[]};};const render=context=>window.elD90History.render(host,{context,target:{resource:'pods',namespace:'team',name:'pod'},settings:{source},invoke});window.elD90History.clearSources();await render('perf-a');await render('perf-a');await render('perf-b');if(JSON.stringify(calls)!==JSON.stringify(['perf-a','perf-b']))throw Error('Prometheus discovery was repeated or leaked across contexts');window.elD90History.clearSources();await render('perf-a');if(calls.length!==3)throw Error('Explicit source cache reset failed');host.remove();window.elD90History.clearSources();});
+    console.log('PASS: one saved-view startup load, deferred inactive workspaces, duplicate-list coalescing and context-scoped Prometheus discovery reuse/reset');
+    await page.evaluate(async()=>{const host=document.createElement('div');document.body.append(host);let release,queried=false;const pending=new Promise(resolve=>release=resolve),source={namespace:'monitoring',name:'prometheus',port:9090};window.elD90History.clearSources();const task=window.elD90History.render(host,{context:'slow-discovery',target:{resource:'pods',namespace:'team',name:'pod'},settings:{source},invoke:async channel=>{if(channel==='history:sources')return pending;queried=true;const end=Math.floor(Date.now()/1000);return{metric:'cpu',unit:'cores',start:end-3600,end,step:15,series:[{name:'Usage',values:[[end,1]]}],errors:[]};}});await new Promise(resolve=>setTimeout(resolve,50));const early=queried;release([source]);await task;host.remove();if(!early)throw Error('Saved chart source was blocked by service discovery');window.elD90History.clearSources();});
+    console.log('PASS: saved Prometheus sources load charts while service discovery is pending');
+
+
     assert.deepEqual(errors, []);
     await application.close(); application = null;
   } finally {
