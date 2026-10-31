@@ -125,6 +125,9 @@ handle('editor:form-read',forms.read);
 handle('editor:form-write',forms.write);
 handle('editor:diagnostics',editor.diagnostics);
 for(const [channel,method] of Object.entries({'aws:sso-reopen':'reopen','aws:sso-portals':'portals','aws:sso-start':'start','aws:sso-status':'status','aws:sso-cancel':'cancel','aws:sso-roles':'roles','aws:sso-select':'select'}))handle(channel,input=>ssoDiscovery[method](input));
+handle('aws:diagnostics',input=>awsConnections.diagnostics(input));
+handle('aws:network-get',()=>require('./runtime-environment.cjs').settings());
+handle('aws:network-save',async input=>{const result=await require('./runtime-environment.cjs').save(input);awsConnections.close();kube.api.close();return result;});
 handle('aws:profiles',()=>awsConnections.profiles());
 handle('aws:profile-create',input=>awsConnections.createProfile(input));
 handle('aws:login-start',input=>awsConnections.startLogin(input));
@@ -266,6 +269,7 @@ async function createWindow() {
   await window.loadFile(path.join(__dirname, 'index.html'));
 }
 app.whenReady().then(async () => {
+  await require('./runtime-environment.cjs').initialize(path.join(app.getPath('userData'),'aws-network.json'),{loadShell:!process.env.EL_D90_USER_DATA});
   try{appliedSettings=await settingsStore.read(settingsPath());kube.setKubeconfigPaths(settingsStore.resolvePaths(appliedSettings));}catch(e){settingsError='Settings could not be loaded: '+e.message;}
   app.setAboutPanelOptions({applicationName:'el-d90',applicationVersion:app.getVersion(),copyright:'Copyright © 2026 David John',credits:'Created and maintained by David John (@djohn99).\nhttps://github.com/djohn99/el-d90'});
   try{const records=JSON.parse(await fs.readFile(journalPath(),'utf8'));nodes.restoreOwned(records);}catch(e){if(e.code!=='ENOENT')nodeCleanupErrors.set('journal','Debug recovery metadata could not be loaded: '+e.message);}

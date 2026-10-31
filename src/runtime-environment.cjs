@@ -1,0 +1,23 @@
+// Finder does not inherit the Terminal environment. Import only networking/tool
+// configuration, never credentials, from the user's login shell.
+const {spawn}=require('node:child_process'),fs=require('node:fs/promises'),nativeFs=require('node:fs'),path=require('node:path');
+const allowed=new Set(['PATH','HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','NO_PROXY','https_proxy','http_proxy','all_proxy','no_proxy','AWS_CA_BUNDLE','AWS_CONFIG_FILE','AWS_SHARED_CREDENTIALS_FILE','EL_D90_SHELL_AWS']);
+let inherited={},saved={},filePath,warning='';
+function shellEnvironment({shell=process.env.SHELL||'/bin/zsh',timeout=2500}={}){return new Promise(resolve=>{
+ if(!['/bin/zsh','/bin/bash','/bin/sh'].includes(shell))return resolve({});
+ let child,output=Buffer.alloc(0),done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value);};
+ const timer=setTimeout(()=>{child?.kill('SIGKILL');finish({});},timeout);
+ try{child=spawn(shell,['-ilc',"/usr/bin/env -0; printf 'EL_D90_SHELL_AWS=%s\\0' \"$(command -v aws 2>/dev/null)\""],{env:process.env,stdio:['ignore','pipe','ignore']});}catch{return finish({});}
+ child.stdout.on('data',chunk=>{output=Buffer.concat([output,chunk]);if(output.length>256*1024){child.kill('SIGKILL');finish({});}});child.on('error',()=>finish({}));child.on('close',code=>{const result={};if(code===0)for(const entry of output.toString().split('\0')){const index=entry.indexOf('='),key=entry.slice(0,index),value=entry.slice(index+1);if(index>0&&allowed.has(key)&&value.length<=16384&&!/[\0\r\n]/.test(value))result[key]=value;}finish(result);});
+ });}
+function normalize(input){const result={};if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Connection settings must be a mapping');for(const [key,raw]of Object.entries(input)){
+ if(!['awsExecutable','httpsProxy','noProxy','caBundle'].includes(key))throw Error('Unknown connection setting');if(typeof raw!=='string'||raw.length>4096||/[\x00-\x1f\x7f]/.test(raw))throw Error('Invalid connection setting');const value=raw.trim();if(!value)continue;
+ if(key==='httpsProxy'){let url;try{url=new URL(value);}catch{throw Error('Use an http:// or https:// proxy URL');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw Error('Use a proxy URL without credentials, query or path');}
+ if(['awsExecutable','caBundle'].includes(key)){if(!path.isAbsolute(value))throw Error('Use an absolute file path');try{const stat=nativeFs.statSync(value);if(!stat.isFile())throw Error();nativeFs.accessSync(value,key==='awsExecutable'?nativeFs.constants.X_OK:nativeFs.constants.R_OK);}catch{throw Error(key==='awsExecutable'?'Choose an executable AWS CLI file':'Choose a readable CA certificate bundle');}}
+ result[key]=value;
+ }return result;}
+function environment(){const env={...process.env,...inherited};if(saved.awsExecutable)env.EL_D90_AWS=saved.awsExecutable;if(saved.caBundle)env.AWS_CA_BUNDLE=saved.caBundle;if(saved.httpsProxy){env.HTTPS_PROXY=saved.httpsProxy;env.https_proxy=saved.httpsProxy;}if(saved.noProxy){env.NO_PROXY=saved.noProxy;env.no_proxy=saved.noProxy;}return env;}
+async function initialize(file,{loadShell=true}={}){filePath=file;inherited=loadShell?await shellEnvironment():{};saved={};warning='';try{const input=JSON.parse(await fs.readFile(file,'utf8'));if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Invalid settings');const invalid=[];for(const [key,value]of Object.entries(input)){try{Object.assign(saved,normalize({[key]:value}));}catch{invalid.push(key==='awsExecutable'?'AWS executable':key==='caBundle'?'CA bundle':key==='httpsProxy'?'HTTPS proxy':key==='noProxy'?'proxy bypass':'unsupported setting');}}if(invalid.length)warning='Review saved '+[...new Set(invalid)].join(', ')+': unavailable or invalid. Other connection settings are retained.';}catch(error){if(error.code!=='ENOENT')warning='Saved connection settings could not be loaded. Review the connection settings.';}}
+function settings(){const env=environment();return{...saved,warning,source:{proxy:!!(env.HTTPS_PROXY||env.https_proxy||env.HTTP_PROXY||env.http_proxy),caBundle:!!env.AWS_CA_BUNDLE,shellImported:Object.keys(inherited).length>0}};}
+async function save(input){const next=normalize(input);if(!filePath)throw Error('Connection settings are not ready');await fs.mkdir(path.dirname(filePath),{recursive:true});const temporary=filePath+'.'+require('node:crypto').randomUUID();try{await fs.writeFile(temporary,JSON.stringify(next),{mode:0o600});await fs.rename(temporary,filePath);saved=next;warning='';}finally{await fs.rm(temporary,{force:true});}return settings();}
+module.exports={environment,initialize,settings,save,normalize,shellEnvironment};

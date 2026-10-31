@@ -16,6 +16,10 @@ function safeError(error) {
   const value = String(error?.message || error);
   if (/abort|cancel/i.test(value)) return 'Cancelled.';
   if (/bad CPU type|exec format/i.test(value)) return 'AWS CLI has the wrong CPU architecture. Install the Apple Silicon AWS CLI.';
+  if (/SSL|CERTIFICATE_VERIFY_FAILED|certificate verify failed|unable to get local issuer/i.test(value)) return 'AWS CLI could not verify the server certificate. Check your company CA bundle configuration; TLS verification remains enabled.';
+  if (/proxy|407 Proxy/i.test(value)) return 'AWS CLI could not connect through the configured proxy. Check the proxy settings available to the app.';
+  if (/Could not connect to the endpoint|EndpointConnection|NameResolution|nodename nor servname|Name or service not known/i.test(value)) return 'AWS CLI could not reach the AWS endpoint. Check VPN, DNS, region and network access.';
+  if (/Unknown options|Invalid choice|unrecognized arguments/i.test(value)) return 'AWS CLI rejected the command options. Check which AWS executable the app is using with Check AWS connection.';
   if (/ENOENT|not found/i.test(value)) return 'AWS CLI v2 was not found. Install it, then reload profiles.';
   if (/expired|UnauthorizedSSOToken|SSO session|TokenRetrieval|InvalidGrant/i.test(value)) return 'Your AWS SSO session has expired. Choose Sign in with AWS SSO again.';
   if (/AccessDenied|Forbidden|not authorized/i.test(value)) return 'AWS denied this request. Check the selected account/role and its EKS permissions.';
@@ -23,13 +27,13 @@ function safeError(error) {
   return 'AWS could not complete this request. Check your profile, region, network and AWS CLI configuration.';
 }
 function binary() {
-  for (const file of [process.env.EL_D90_AWS, ...kube.environment().PATH.split(path.delimiter).map(dir => path.join(dir, 'aws'))].filter(Boolean)) {
+  for (const file of [kube.environment().EL_D90_AWS, kube.environment().EL_D90_SHELL_AWS, ...kube.environment().PATH.split(path.delimiter).map(dir => path.join(dir, 'aws'))].filter(Boolean)) {
     try { nativeFs.accessSync(file, nativeFs.constants.X_OK); return file; } catch {}
   }
   throw Error('AWS CLI not found');
 }
 function run(args, options = {}) {
-  const env = { ...kube.environment(), AWS_PAGER: '', AWS_CLI_AUTO_PROMPT: 'off', AWS_IGNORE_CONFIGURED_ENDPOINT_URLS: 'true' };
+  const env = { ...kube.environment(), AWS_PAGER: '', AWS_CLI_AUTO_PROMPT: 'off' };
   for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_SECURITY_TOKEN']) delete env[key];
   return new Promise((resolve, reject) => {
     const child = spawn(options.binary || binary(), [...args, '--no-cli-pager'], { shell: false, env, stdio: ['ignore', 'pipe', 'pipe'], signal: options.signal });
@@ -38,12 +42,12 @@ function run(args, options = {}) {
     const append = (chunk, error) => { if (error) stderr += chunk.toString(); else stdout += chunk.toString(); if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > 2 * 1024 * 1024) { failure = Error('AWS response too large'); child.kill('SIGKILL'); } };
     child.stdout.on('data', chunk => append(chunk, false)); child.stderr.on('data', chunk => append(chunk, true));
     child.on('error', error => { clearTimeout(timer); reject(error); });
-    child.on('close', code => { clearTimeout(timer); if (failure) reject(failure); else if (code) reject(Error(stderr || 'AWS request failed')); else resolve(stdout); });
+    child.on('close', code => { clearTimeout(timer); if (failure) reject(failure); else if (code) reject(Object.assign(Error(stderr || 'AWS request failed'),{exitCode:code})); else resolve(stdout); });
   });
 }
 class AWSConnections {
   constructor(directory, options = {}) { this.directory = directory; this.options = options; this.jobs = new Map(); this.writes = Promise.resolve(); }
-  configPath() { return this.options.configFile || process.env.AWS_CONFIG_FILE || path.join(os.homedir(), '.aws/config'); }
+  configPath() { return this.options.configFile || kube.environment().AWS_CONFIG_FILE || path.join(os.homedir(), '.aws/config'); }
   run(args, options) { return (this.options.run || run)(args, options); }
   async configText() { try { const stat = await fs.stat(this.configPath()); if (stat.size > 1024 * 1024) throw Error('AWS config too large'); return await fs.readFile(this.configPath(), 'utf8'); } catch (error) { if (error.code === 'ENOENT') return ''; throw error; } }
   async profiles() {
@@ -77,6 +81,15 @@ class AWSConnections {
   status(input) { const job = this.jobs.get(input.id); if (!job) throw Error('Sign-in attempt not found'); return { id: job.id, profile: job.profile, state: job.state, message: job.message, account: job.account || '', arn: job.arn || '' }; }
   cancel(input) { const job = this.jobs.get(input.id); if (job?.state === 'running') { job.state = 'cancelled'; job.message = 'Sign-in cancelled. You may close the AWS browser tab.'; job.controller.abort(); } return job ? this.status(input) : { state: 'cancelled' }; }
   close() { for (const job of this.jobs.values()) this.cancel({ id: job.id }); }
+  async diagnostics(input) {
+    const profile=await this.profile(input.profile),selectedRegion=region(input.region),env=kube.environment(),executable=this.options.binary||binary(),checks=[];
+    let version='Unavailable';try{const output=await this.run(['--version'],{timeout:8000});version=/aws-cli\/[0-9.]+/.exec(output)?.[0]||'Unrecognized AWS CLI version';}catch(error){checks.push({name:'AWS CLI',ok:false,message:safeError(error)});}
+    for(const [label,args]of [['Identity',['sts','get-caller-identity','--profile',profile.name,'--output','json']],['EKS cluster listing',['eks','list-clusters','--profile',profile.name,'--region',selectedRegion,'--output','json']]]){
+      try{const result=JSON.parse(await this.run(args,{timeout:10000}));checks.push({name:label,ok:true,message:label==='Identity'?'Selected profile authenticated.':String(result.clusters?.length||0)+' EKS clusters returned.'});}
+      catch(error){checks.push({name:label,ok:false,message:safeError(error),...(Number.isInteger(error.exitCode)?{exitCode:error.exitCode}:{})});}
+    }
+    return {executable,version,profile:profile.name,region:selectedRegion,environment:{proxyConfigured:!!(env.HTTPS_PROXY||env.https_proxy||env.HTTP_PROXY||env.http_proxy),caBundleConfigured:!!(env.AWS_CA_BUNDLE),configOverride:!!env.AWS_CONFIG_FILE,credentialsOverride:!!env.AWS_SHARED_CREDENTIALS_FILE,endpointOverride:!!(env.AWS_ENDPOINT_URL||env.AWS_ENDPOINT_URL_EKS)},checks};
+  }
   async clusters(input) {
     const profile = await this.profile(input.profile), selectedRegion = region(input.region);
     try { const result = JSON.parse(await this.run(['eks', 'list-clusters', '--profile', profile.name, '--region', selectedRegion, '--output', 'json'])); return { profile: profile.name, region: selectedRegion, clusters: (result.clusters || []).filter(name => typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(name)).slice(0, 1000) }; }

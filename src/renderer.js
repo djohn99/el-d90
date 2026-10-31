@@ -167,12 +167,12 @@ function filterTable() {
   $('resource-count').textContent = `${items.length} resource${items.length === 1 ? '' : 's'}`; renderTable('resource-table', items, activeResource());
 }
 function updatePageHeading(){
- const cluster=state.view==='cluster';document.querySelector('.resource-filters').hidden=state.view==='events';
+ const cluster=state.view==='cluster',resource=activeResource(),compact=state.view!=='overview'&&!SPECIAL_VIEWS.includes(state.view),clusterScoped=cluster||['nodes','namespaces','persistentvolumes','storageclasses','clusterroles','clusterrolebindings','customresourcedefinitions'].includes(resource)||state.catalogue.find(item=>item.key===resource)?.namespaced===false;document.querySelector('.page-heading').classList.toggle('compact-resource-heading',compact);document.querySelector('.content').classList.toggle('compact-resource-content',compact);document.querySelector('.resource-filters').hidden=state.view==='events';
  $('eyebrow').textContent=cluster?'YOUR WHOLE CLUSTER':state.view==='overview'?'NAMESPACE OVERVIEW':'EXPLORE YOUR CLUSTER';
  $('page-description').textContent=cluster?'CPU, memory and Pod capacity across all namespaces.':state.view==='overview'?'Workload health and recent activity for the selected namespaces.':`Inspect ${(titles[state.view]||state.view).toLowerCase()}, view manifests, and work in context.`;
- hidden('namespace-filter',cluster);hidden('namespace-selection',cluster);
- hidden('namespace-warning',cluster||!state.namespaceError);hidden('namespace-manual',cluster||!state.namespaceError);
- if(cluster){hidden('namespace-popover',true);$('namespace-multi').setAttribute('aria-expanded','false');}
+ hidden('namespace-filter',clusterScoped);hidden('namespace-selection',clusterScoped||!state.namespaces.length);
+ hidden('namespace-warning',clusterScoped||!state.namespaceError);hidden('namespace-manual',clusterScoped||!state.namespaceError);
+ if(clusterScoped){hidden('namespace-popover',true);$('namespace-multi').setAttribute('aria-expanded','false');}
 }
 async function navigate(view) {
   ++workspaceIntent;
@@ -485,6 +485,7 @@ function renderNamespaceOptions() {
   $('namespace-selection').innerHTML=state.namespaces.length?state.namespaces.map(ns=>`<span class="namespace-chip">${escape(ns)}<button data-remove-namespace="${escape(ns)}" aria-label="Remove namespace ${escape(ns)}">×</button></span>`).join('')+'<button id="namespace-clear" class="button secondary">Clear all</button>':'<span>All namespaces</span>';
   $('namespace-selection').querySelectorAll('[data-remove-namespace]').forEach(b=>b.onclick=()=>setNamespaceSelection(state.namespaces.filter(ns=>ns!==b.dataset.removeNamespace)).catch(error));
   if($('namespace-clear'))$('namespace-clear').onclick=()=>setNamespaceSelection([]).catch(error);
+  updatePageHeading();
 }
 function paintWorkspace() {window.elD90SecretValues.clear();window.elD90ResourceData.clear();
   $('special-content').innerHTML='';$('detail-summary').innerHTML='';$('yaml-editor').value='';$('logs-output').textContent='';
