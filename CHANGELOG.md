@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.4] - 2026-10-31
+
+### Added
+
+- AWS connection diagnostics show the CLI executable/version, selected profile and region, and sanitized identity and EKS checks.
+- Optional AWS executable, HTTPS proxy, proxy bypass and CA bundle settings that persist privately on each Mac.
+- Drag resource table column edges to resize, with widths saved per resource type, keyboard adjustment and double-click reset.
+
+### Changed
+
+- Finder launches import allowlisted networking and AWS configuration settings from the login shell, including its AWS executable, without importing static AWS credentials.
+- Column dividers stay subtle, highlighting only on hover, keyboard focus or drag.
+- Resource headers use a compact layout; cluster-scoped pages hide namespace controls and the duplicate All namespaces line is removed.
+
+### Fixed
+
+- AWS CLI requests respect configured endpoint URLs and inherited proxy/CA configuration while retaining certificate verification.
+
 ## [0.5.3] - 2026-10-31
 
 ### Added
