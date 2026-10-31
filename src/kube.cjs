@@ -67,7 +67,7 @@ function scope(input, kind, requireNamespace = false) {
 let configuredKubeconfigPaths=[];
 function setKubeconfigPaths(paths,{preserveCatalogues=false}={}){const previous=configuredKubeconfigPaths.length?configuredKubeconfigPaths:(environment().KUBECONFIG||path.join(os.homedir(),'.kube/config')).split(path.delimiter).filter(Boolean);const appended=paths.length>=previous.length&&previous.every((p,i)=>p===paths[i]);configuredKubeconfigPaths=[...paths];api.close();if(!preserveCatalogues||!appended)catalogues.clear();pendingLists.clear();}
 function environment() {
-  return { ...process.env, ...(configuredKubeconfigPaths.length?{KUBECONFIG:configuredKubeconfigPaths.join(path.delimiter)}:{}), PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(process.env.PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(':') };
+  return { ...require('./runtime-environment.cjs').environment(), ...(configuredKubeconfigPaths.length?{KUBECONFIG:configuredKubeconfigPaths.join(path.delimiter)}:{}), PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(require('./runtime-environment.cjs').environment().PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(':') };
 }
 function executable() {
   const candidates = [process.env.EL_D90_KUBECTL || process.env.HARBOR_KUBECTL, ...environment().PATH.split(':').map(p => path.join(p, 'kubectl'))].filter(Boolean);
