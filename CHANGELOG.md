@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.5.3] - 2026-10-31
+
+### Added
+
+- AWS SSO browser sign-in followed by discovery of assigned accounts and roles, searchable selections, separate role profiles and EKS connections.
+- Rich ConfigMap/Secret data controls, resource-specific details and HPA/VPA visibility.
+- Hierarchical resource-map grouping, multi-cluster Projects, local Monaco editing/diffs, guided resource forms, curated Helm catalog, read-only GitOps views and declarative extensions.
+- Guided kubeconfig import and provider/client diagnostics.
+
+### Changed
+
+- Frequent Kubernetes resource lists, Events, metrics/API reads and watches use persistent, context-isolated API connections. Terminal, log, Helm and mutation CLI workflows remain intact.
+- Optional metrics no longer block resource rows or navigation; namespace scopes, pagination, cancellation and stale-result isolation are retained.
+- Sidebar headings are bolder and Custom API Groups fully collapses.
+
+### Fixed
+
+- Appearance saves no longer overwrite newer live previews.
+- SSO account/role selection uses clickable lists instead of native dropdowns.
+- Kubeconfig-relative exec paths and rotating tokenFile credentials are preserved by the API transport; auth failures never switch identities.
+
 ## [0.5.2] - 2026-10-30
 
 ### Added

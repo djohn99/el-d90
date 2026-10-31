@@ -8,9 +8,9 @@ An independent, local Kubernetes desktop workspace for macOS. Open multiple clus
 
 **[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
 
-[Direct DMG download for 0.5.2](https://github.com/djohn99/el-d90/releases/download/v0.5.2/el-d90-0.5.2-mac-arm64.dmg)
+[Direct DMG download for 0.5.3](https://github.com/djohn99/el-d90/releases/download/v0.5.3/el-d90-0.5.3-mac-arm64.dmg)
 
-Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.2) · [All releases](https://github.com/djohn99/el-d90/releases)
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.3) · [All releases](https://github.com/djohn99/el-d90/releases)
 
 1. Download the DMG using the link above.
 2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
@@ -35,10 +35,10 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
-To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.2/el-d90-0.5.2-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.3/el-d90-0.5.3-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
 
 ```sh
-shasum -a 256 -c el-d90-0.5.2-mac-arm64.dmg.sha256
+shasum -a 256 -c el-d90-0.5.3-mac-arm64.dmg.sha256
 ```
 
 ## Screenshots
@@ -53,11 +53,45 @@ Deployment inspection with combined replica logs:
 
 *Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
 
+## New in 0.5.3
+
+**0.5.3** adds persistent Kubernetes API reads and watches, AWS SSO account/role discovery and richer resource details. See the [complete release notes](docs/releases/0.5.3.md). Occasional tools are grouped under **Advanced**, collapsed by default; its open/closed preference is remembered.
+
+- **Resource map:** group by namespace, application or node, collapse/expand groups, focus a resource and expand its dependency neighborhood.
+- **YAML:** use **Rich editor** for local Monaco editing, **Compare changes** for side-by-side review and **Reset to loaded YAML** to restore the loaded baseline. Local checks and explicitly loaded schema diagnostics complement server Validate. The plain editor remains available.
+- **Projects:** create a local named scope across one or more contexts and namespace sets. Combined resources and health retain exact cluster identities and mark partial or unassessed data.
+- **App catalog:** browse curated Prometheus, cert-manager and Argo CD charts, review upstream requirements/version/default values, then continue to the existing Helm preview and native confirmation. Browsing does not install anything.
+- **Guided form:** read a single YAML document into common-resource fields or explicitly load an available resource schema. Update YAML locally while preserving fields outside the form; stale forms cannot overwrite newer YAML. Multi-document manifests remain supported through the YAML editor.
+- **GitOps:** read-only Argo CD Application/AppProject/ApplicationSet and Flux controller/source visibility, including sync/health, revisions, conditions, history and verified managed-resource links. Remote/ambiguous destinations never navigate to a same-named local object. Requires the relevant controllers/APIs and read permissions; the app does not install them automatically.
+- **Extensions:** install, update, enable/disable and remove reviewed declarative JSON manifests. SDK v1 adds read-only resource pages, metadata/status details, columns and namespace-scoped map relations. No arbitrary JavaScript, HTML, network calls or commands are permitted. Headlamp plugins are not compatible. See [extension authoring](docs/extensions.md).
+- **Connect clusters:** inspect provider/client metadata, preview and import kubeconfig *paths*, run an exact-context/namespace read-only test, then open that cluster. Configured OIDC exec plugins may open their own browser login; provider registration and legacy-to-exec conversion remain external. Tokens, certificates, exec arguments and environment values are not returned to the wizard or copied into app settings.
+
+**Kubernetes read transport:** Resource lists, resource Events, raw API/metrics GETs and live watches use persistent, context-isolated Kubernetes API connections. Exec credentials are cached in memory until refresh is needed, with bounded plugin execution; kubeconfig CA, client certificates, TLS server names, configured proxies and impersonation settings are retained. Lists are paginated and Secret list data remains redacted. Permission failures are reported without switching identities. Terminals, logs, port forwarding, Helm, YAML apply/validation and other mutations retain their existing CLI paths. `EL_D90_KUBE_TRANSPORT=cli` is available as an explicit diagnostic compatibility override; test fixture binaries also use CLI mode unless API mode is explicitly requested. See the [read-transport measurements and validation](docs/performance-api-client.md).
+
+**AWS SSO / EKS:** Open **Advanced → Connect clusters → AWS SSO → EKS**. Select an AWS CLI profile and region, choose **Sign in with AWS SSO**, complete browser sign-in, then choose a cluster and **Add EKS connection → Open this cluster**. Cluster discovery loads automatically after successful sign-in. If listing is restricted, enter a known cluster name. AWS CLI v2 manages credential caching and `eks get-token`; el-d90 never asks for copied access tokens.
+
+To discover your assignments, choose **Sign in & discover roles**. The app pre-fills a known SSO portal URL/region when available, or you can enter your organization’s AWS access portal `/start` URL and SSO region. Complete browser sign-in first; only then does AWS return your assigned accounts. Choose **AWS account → Assigned role → Use selected role**. A separate named AWS CLI profile is saved for that account/role and clusters load automatically. You can repeat the selection for another role without signing in again while the discovery session is valid. This flow does not change AWS or Kubernetes permissions. OAuth tokens remain in the background process and the private AWS CLI SSO cache, never in the renderer or kubeconfig.
+
+The advanced **Set up a new SSO profile** form remains available for manual setup. Existing profile names and the default profile are never overwritten; configuration changes create a private backup. Existing non-SSO profiles may load EKS clusters using their configured credentials. New EKS kubeconfigs are stored privately in the app profile and loaded immediately; your global kubeconfig/current-context is unchanged. EKS discovery and Kubernetes access depend on the selected role’s existing permissions. See [AWS SSO configuration](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html).
+
+Sidebar section headings use bold text; section and Custom API Groups collapse preferences are remembered.
+
+Recent resource workflow improvements:
+
+- ConfigMap Details now show multiline per-key text and labelled binary data, key filtering, copy, add/remove/edit fields and **Review YAML changes**. Editing loads the current manifest; unrelated fields, exact identity and binary values are preserved. Existing YAML drafts are protected. Validate and Apply retain their usual server/native confirmation workflow.
+- Secret values have per-key show/hide/copy and edit-to-YAML controls. UTF-8 edits are base64-encoded before staging; other keys stay intact. Revealed values and edit buffers are cleared on panel/tab/context changes. Clipboard writes happen only when Copy is clicked.
+- All 31 built-in resource kinds use type-specific detail fields, applicable tabs, workload container status/resources and declared resource references. HPA current metrics, VPA recommendations, storage and RBAC references appear where reported. Custom APIs retain their schema/YAML and available conditions.
+- Pods, Nodes, Deployments and Overview render resource rows before optional metrics arrive. Delayed responses stay with their exact cluster/generation. Permission checks are limited to applicable actions. In an isolated fixture with a 1,500 ms metrics delay, first Pod paint improved from 1,790.7 ms to 80.6 ms; this is a controlled rendering result, not a universal cluster speed claim.
+
+AI remains disabled. These additions use el-d90 implementations and the upstream Monaco dependency; no Headlamp implementation code is bundled.
+
 ## Features
 
 - Concurrent cluster tabs with independent namespace sets, views and connection state.
 - Workloads, networking, storage, RBAC, Events and dynamically discovered APIs/custom resources.
 - Resource creation/import, YAML editing, local validation, server dry-run and confirmed apply.
+- Secret detail **Reveal decoded values** / **Hide values** controls, with native confirmation and panel-only display. UTF-8 data is decoded; binary data is labelled as base64.
+- Dedicated **Autoscaling** navigation for HPA and VPA, with VPA target, update policy and container recommendations when the API/controller is installed and accessible.
 - Deployment logs aggregated across replicas, Pod logs and interactive Pod shells.
 - General local cluster terminals with multiple terminal/log sessions per cluster. Drag the panel’s top edge to resize; close individual sessions or dismiss the panel.
 - Dedicated Cluster page with CPU, memory and Pod capacity rings, requests/limits, worker/control-plane filters and CPU/memory history across all namespaces. Overview retains workload health and recent activity for the selected namespaces.
@@ -93,7 +127,7 @@ CPU and memory usage require Metrics API access. Missing samples or permissions 
 
 ## Workspace display and configuration
 
-In version 0.5.2, open **Settings** at the bottom of the sidebar to choose **Dark**, **Light** or **Follow system** and adjust text size. Theme, text size and color changes preview immediately. Choose **Apply settings** to save, or **Cancel** / Escape to restore your saved appearance. In **Smart palette**, pick one main color or preset to generate coordinated light and dark palettes automatically. Generated text and accent colors maintain at least 4.5:1 contrast against the generated surfaces. Open **Advanced customization** to adjust accent, background, sidebar, panels, text and secondary text individually; manual overrides can change that contrast. Light and dark themes keep separate palettes; **Reset colors for this theme** restores its defaults.
+Open **Settings** at the bottom of the sidebar to choose **Dark**, **Light** or **Follow system** and adjust text size. Theme, text size and color changes preview immediately. Choose **Apply settings** to save, or **Cancel** / Escape to restore your saved appearance. In **Smart palette**, pick one main color or preset to generate coordinated light and dark palettes automatically. Generated text and accent colors maintain at least 4.5:1 contrast against the generated surfaces. Open **Advanced customization** to adjust accent, background, sidebar, panels, text and secondary text individually; manual overrides can change that contrast. Light and dark themes keep separate palettes; **Reset colors for this theme** restores its defaults.
 
 Use **Choose kubeconfig files…** or edit the application settings YAML to reference kubeconfig files elsewhere on your Mac:
 
@@ -130,7 +164,7 @@ Use `npm run demo` for disconnected sample data. `EL_D90_KUBECTL` and `EL_D90_HE
 
 ## Usage
 
-Choose a kubeconfig context to open a cluster workspace. Open another context for another cluster tab. In **Namespaces**, check multiple namespaces and apply their union. Single-resource actions keep the selected object’s exact namespace.
+Choose a kubeconfig context to open a cluster workspace. Open another context for another cluster tab. In **Namespaces**, check multiple namespaces to immediately view their union. Single-resource actions keep the selected object’s exact namespace.
 
 Use **Terminal & logs** to open the session panel. Start local terminals or exact Pod/Deployment log sessions. Drag the top edge up or down; the focused handle also supports arrow keys. **Close session** or a tab’s × stops that session. The panel’s top-right × hides the panel while sessions continue. Disconnecting a cluster or quitting ends its owned processes.
 
@@ -162,7 +196,7 @@ npm test
 npm run test:desktop-all
 ```
 
-The backend suite has 154 checks. Thirteen desktop suites use isolated profiles and offline CLI fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal and selected-session closure. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row virtualization, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
+The backend suite has 226 checks. Twenty-four desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal and selected-session closure. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row virtualization, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
 
 To test an existing package, set `EL_D90_APP_EXECUTABLE` to its executable path. Automated tests do not require real cluster credentials. Live node SSH, privileged debug and Helm mutations are not established by fixture tests.
 
@@ -205,7 +239,7 @@ Download official builds from [this repository’s Releases](https://github.com/
 
 ## Automated releases
 
-Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.2` for version `0.5.2`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.3` for version `0.5.3`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
 
 After committing your next changes:
 

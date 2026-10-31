@@ -35,6 +35,7 @@ class Watches {
   _read(group,lane,args,epoch){
     if(!this._active(group,lane,epoch))return Promise.reject(new Error('Watch stopped'));
     if(this.options.run)return this.options.run(args);
+    if(!this.options.spawn&&!this.options.executable&&kube.api.enabled()){const controller=new AbortController();lane.readChild={kill:()=>controller.abort()};return kube.api.get(group.context,kube.listPath({context:group.context,namespace:lane.namespace||'*'},group.resource)+'?limit=1',{signal:controller.signal}).then(JSON.stringify).finally(()=>{lane.readChild=null;});}
     return new Promise((resolve,reject)=>{
       let child;try{child=this.spawn(this.options.executable||kube.executable(),args,{env:kube.environment(),detached:true,shell:false,stdio:['ignore','pipe','pipe']});}catch(error){reject(error);return;}
       lane.readChild=child;let output='',stderr='',failure=null,done=false;
@@ -64,7 +65,7 @@ class Watches {
       }
       if(!this._active(group,lane,epoch))return;
       const args=['get',group.resource,...this._flags(group,lane),'--watch-only=true','--output-watch-events=true','-o','json','--resource-version='+lane.rv,'--request-timeout=0'];
-      const child=this.spawn(this.options.executable||kube.executable(),args,{env:kube.environment(),detached:true,shell:false,stdio:['ignore','pipe','pipe']});lane.child=child;let stderr='',closed=false,parserFailed=false;
+      const apiWatch=!this.options.spawn&&!this.options.executable&&kube.api.enabled();const child=apiWatch?kube.api.stream(group.context,kube.listPath({context:group.context,namespace:lane.namespace||'*'},group.resource)+'?'+new URLSearchParams({watch:'true',allowWatchBookmarks:'true',resourceVersion:lane.rv,timeoutSeconds:'300'})):this.spawn(this.options.executable||kube.executable(),args,{env:kube.environment(),detached:true,shell:false,stdio:['ignore','pipe','pipe']});lane.child=child;let stderr='',closed=false,parserFailed=false;
       const active=()=>this._active(group,lane,epoch)&&lane.child===child;
       const parser=new JsonEventParser(event=>{
         if(!active())return;
@@ -87,7 +88,7 @@ class Watches {
         this._schedule(group,lane,{relist:expired(message)||!!error,pause:authError(message),error:message});
       };
       child.once('error',error=>finish(1,error));child.once('close',code=>finish(code));
-      if(!active()){this._terminate(child);return;}lane.state='watching';lane.error=null;this._status(group);
+      if(!active()){this._terminate(child);return;}const ready=()=>{if(!active())return;lane.state='watching';lane.error=null;this._status(group);};if(apiWatch)child.once('ready',ready);else ready();
     }catch(error){if(this._active(group,lane,epoch))this._schedule(group,lane,{relist:true,pause:authError(error.message)||/resourceVersion; live watch is unavailable/.test(error.message),error:error.message});}
   }
   stop(id){const group=this.groups.get(id);if(!group)return;group.stopped=true;for(const lane of group.lanes){lane.epoch++;clearTimeout(lane.timer);this._terminate(lane.child);if(lane.readChild)this.kill(lane.readChild,'SIGKILL');lane.child=null;lane.readChild=null;}this.groups.delete(id);try{this.options.onStatus?.({id,context:group.context,resource:group.resource,state:'stopped',error:null});}catch{}}

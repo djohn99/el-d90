@@ -1,7 +1,7 @@
 {
   "name": "el-d90",
   "productName": "el-d90",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Your local Kubernetes workspace",
   "author": "David John",
   "license": "MIT",
@@ -11,8 +11,8 @@
     "start": "electron .",
     "demo": "electron . --demo",
     "test": "node --test test/*.test.cjs",
-    "package": "electron-packager . el-d90 --platform=darwin --arch=arm64 --out=dist --overwrite --app-bundle-id=local.davidjohn.el-d90 --app-category-type=public.app-category.developer-tools --ignore=^/research --ignore=^/test --ignore=^/dist --ignore=^/scripts --icon=assets/el-d90.icns --asar.unpackDir=assets --app-copyright='Copyright \u00a9 2026 David John' --ignore=^/[.]github",
-    "build:native": "clang -arch arm64 -mmacosx-version-min=13.0 -O2 -Wall -Wextra src/pty.c -o assets/el-d90-pty",
+    "package": "electron-packager . el-d90 --platform=darwin --arch=arm64 --out=dist --overwrite --app-bundle-id=local.davidjohn.el-d90 --app-category-type=public.app-category.developer-tools --ignore=^/research --ignore=^/test --ignore=^/dist --ignore=^/scripts --icon=assets/el-d90.icns --asar.unpackDir=assets --app-copyright='Copyright © 2026 David John' --ignore=^/[.]github",
+    "build:native": "node scripts/prepare-editor.cjs && clang -arch arm64 -mmacosx-version-min=13.0 -O2 -Wall -Wextra src/pty.c -o assets/el-d90-pty",
     "postinstall": "node node_modules/electron/install.js",
     "prestart": "npm run build:native",
     "predemo": "npm run build:native",
@@ -21,7 +21,7 @@
     "pretest": "npm run build:native",
     "test:workspaces": "node test/workspaces-smoke.cjs",
     "test:helm-history": "node test/helm-history-smoke.cjs",
-    "test:desktop-all": "npm run test:desktop && npm run test:workspaces && npm run test:helm-history && npm run test:node-access && npm run test:events && npm run test:scaling && npm run test:sessions && npm run test:display-map && npm run test:smart-palette && npm run test:columns && npm run test:cluster-dashboard && npm run test:workspace-tools && npm run test:dismissal",
+    "test:desktop-all": "npm run test:desktop && npm run test:workspaces && npm run test:helm-history && npm run test:node-access && npm run test:events && npm run test:scaling && npm run test:sessions && npm run test:display-map && npm run test:smart-palette && npm run test:columns && npm run test:cluster-dashboard && npm run test:workspace-tools && npm run test:dismissal && npm run test:map-projects && npm run test:editor-forms && npm run test:catalog-gitops-extensions && npm run test:connections && npm run test:secrets-autoscaling && npm run test:resource-data && npm run test:permission-details && npm run test:resource-paint && npm run test:secret-controls && npm run test:aws-connections && npm run test:kube-api",
     "test:node-access": "node test/node-access-smoke.cjs",
     "test:events": "node test/events-smoke.cjs",
     "test:scaling": "node test/scaling-smoke.cjs",
@@ -32,9 +32,23 @@
     "test:columns": "node test/columns-smoke.cjs",
     "test:cluster-dashboard": "node test/cluster-dashboard-smoke.cjs",
     "test:workspace-tools": "node test/workspace-tools-smoke.cjs",
-    "test:dismissal": "node test/dismissal-smoke.cjs"
+    "test:dismissal": "node test/dismissal-smoke.cjs",
+    "test:map-projects": "node test/map-projects-smoke.cjs",
+    "test:editor-forms": "node test/editor-forms-smoke.cjs",
+    "test:catalog-gitops-extensions": "node test/catalog-gitops-extensions-smoke.cjs",
+    "test:connections": "node test/connections-smoke.cjs",
+    "test:secrets-autoscaling": "node test/secrets-autoscaling-smoke.cjs",
+    "test:resource-data": "node test/resource-data-smoke.cjs",
+    "test:permission-details": "node test/permission-details-smoke.cjs",
+    "test:resource-paint": "node test/resource-paint-smoke.cjs",
+    "test:secret-controls": "node test/secret-values-controls-smoke.cjs",
+    "test:aws-connections": "node test/aws-connections-smoke.cjs",
+    "test:kube-api": "node test/kube-api-smoke.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-sso": "^3.1161.0",
+    "@aws-sdk/client-sso-oidc": "^3.1161.0",
+    "@kubernetes/client-node": "^2.0.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "yaml": "^2.9.1"
@@ -42,6 +56,7 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "electron": "45.1.0",
+    "monaco-editor": "0.57.0",
     "playwright": "1.64.1"
   },
   "repository": {

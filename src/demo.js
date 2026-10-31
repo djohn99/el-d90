@@ -17,7 +17,7 @@
     cronjobs: [resource('CronJob', 'database-backup', 'production', { schedule: '0 2 * * *', suspend: false,jobTemplate:{spec:{template:{spec:{containers:[{name:'backup',image:'example/backup:1'}]}}}} }, { lastScheduleTime: ago(240) })],
     services: [resource('Service', 'api-gateway', 'production', { type: 'ClusterIP', clusterIP: '10.96.42.18', ports: [{ port: 8080, protocol: 'TCP' }] }), resource('Service', 'web-frontend', 'production', { type: 'LoadBalancer', clusterIP: '10.96.28.5', ports: [{ port: 80, protocol: 'TCP' }] })],
     ingresses: [resource('Ingress', 'web-ingress', 'production', { rules: [{ host: 'app.example.test' }] })],
-    configmaps: [resource('ConfigMap', 'api-config', 'production')],
+    configmaps: [{...resource('ConfigMap', 'api-config', 'production'),data:{'app.yaml':'server:\n  port: 8080\n  logLevel: info\n','features.json':'{\n  \"checkout\": true\n}\n'},binaryData:{'sample.bin':'AAECAw=='}}],
     persistentvolumeclaims: [resource('PersistentVolumeClaim', 'postgres-data', 'production', { resources: { requests: { storage: '50Gi' } }, storageClassName: 'standard' }, { phase: 'Bound' })],
     nodes: ['worker-eu-01', 'worker-eu-02', 'worker-eu-03'].map(n => resource('Node', n, undefined, {}, { conditions: [{ type: 'Ready', status: 'True' }], capacity: { cpu: '4', memory: '16Gi' }, nodeInfo: { kubeletVersion: 'v1.33.4' } })),
     namespaces: ['production', 'staging', 'observability', 'kube-system'].map(n => resource('Namespace', n, undefined, {}, { phase: 'Active' })), events,
@@ -28,6 +28,8 @@
   data.storageclasses = [resource('StorageClass', 'standard', undefined)];
   data.roles = [resource('Role', 'application-reader', 'production')];
   data.horizontalpodautoscalers = [resource('HorizontalPodAutoscaler', 'api-gateway', 'production', { minReplicas: 2, maxReplicas: 6 }, { currentReplicas: 2, desiredReplicas: 2 })];
+  data['verticalpodautoscalers.autoscaling.k8s.io']=[{...resource('VerticalPodAutoscaler','api-gateway','production',{targetRef:{kind:'Deployment',name:'api-gateway',apiVersion:'apps/v1'},updatePolicy:{updateMode:'Off'}},{recommendation:{containerRecommendations:[{containerName:'api',target:{cpu:'200m',memory:'256Mi'},lowerBound:{cpu:'100m',memory:'128Mi'},upperBound:{cpu:'1',memory:'1Gi'}}]},conditions:[{type:'RecommendationProvided',status:'True'}]}),apiVersion:'autoscaling.k8s.io/v1'}];
+  for(const row of [...data.configmaps,...data.secrets])row.metadata.uid='demo-'+row.kind+'-'+row.metadata.name;
   window.demoWorkspace = {
     discovery() { return { resources: Object.entries(data).map(([key, rows]) => ({ key, title: rows[0]?.kind || key, kind: rows[0]?.kind || key, apiVersion: key.includes('.') ? 'example.test/v1' : 'v1', namespaced: Boolean(rows[0]?.metadata.namespace), verbs: ['get', 'list', 'watch'] })), warnings: [] }; },
     metrics(namespace) { const items = pods.filter(p => namespace === '*' || p.metadata.namespace === namespace).map(p => ({ metadata: p.metadata, window: '30s', containers: [{ name: p.spec.containers[0].name, usage: { cpu: '125m', memory: '96Mi' } }] })); return { pods: { items }, nodes: { items: data.nodes.map(n => ({ metadata: n.metadata, window: '30s', usage: { cpu: '840m', memory: '2048Mi' } })) }, errors: [] }; },
