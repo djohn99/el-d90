@@ -57,6 +57,8 @@ Deployment inspection with combined replica logs:
 
 **0.5.4** improves AWS connections on proxy-managed Macs, adds connection diagnostics and saved column widths, and brings resource filters closer to the table. See the [complete release notes](docs/releases/0.5.4.md). Occasional tools are grouped under **Advanced**, collapsed by default; its open/closed preference is remembered.
 
+Earlier workspace additions remain available:
+
 - **Resource map:** group by namespace, application or node, collapse/expand groups, focus a resource and expand its dependency neighborhood.
 - **YAML:** use **Rich editor** for local Monaco editing, **Compare changes** for side-by-side review and **Reset to loaded YAML** to restore the loaded baseline. Local checks and explicitly loaded schema diagnostics complement server Validate. The plain editor remains available.
 - **Projects:** create a local named scope across one or more contexts and namespace sets. Combined resources and health retain exact cluster identities and mark partial or unassessed data.
@@ -125,6 +127,8 @@ Credentials and local profiles are not included in source or installers. Each CL
 
 Use the **⋮ column picker** above a resource table to choose its visible columns. Choices are saved separately by resource type. Pods include usage, restarts, controller, IP, node and QoS; Nodes include usage, disk capacity, pod count, instance type, node group, roles, taints and conditions. Workload, network, storage and access-control tables expose fields appropriate to their APIs. CSV exports include only visible columns.
 
+Drag the right edge of a column header to resize it. A thin divider highlights on hover, keyboard focus or drag; widths are saved separately by resource type. Focus the divider and use arrow keys to adjust it (Shift makes larger steps), or double-click to reset.
+
 CPU and memory usage require Metrics API access. Missing samples or permissions show **Unavailable**. Node disk values are ephemeral-storage capacity/allocatable values, not measured disk usage. Node pod counts require listing scheduled, non-terminated Pods across all namespaces.
 
 ## Workspace display and configuration
@@ -146,6 +150,8 @@ kubeconfig:
 Save and restart el-d90 to apply changed kubeconfig paths. An empty list uses your existing `KUBECONFIG` environment variable or `~/.kube/config`. The app references those files without copying their credentials or changing their contents. Close active terminal/log/node sessions and Helm operations before restarting.
 
 Sidebar sections can be collapsed with their heading arrows; expanded states persist across launches. Resource navigation uses the sidebar without an extra row of resource-view tabs.
+
+Namespace controls are shown for namespaced resources; Nodes and other cluster-scoped resources hide them. The selector already identifies All namespaces, so that label is not repeated below the compact resource header.
 
 Selected namespaces appear as chips: **×** removes one namespace and **Clear all** returns to all namespaces. Custom definitions are grouped by API group, with shortcuts to their definitions/YAML and discovered resources. The sidebar’s custom API groups provide searchable resource-type navigation.
 
