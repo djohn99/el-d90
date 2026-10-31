@@ -13,3 +13,5 @@ Before initial publication, the following checks were performed on 2026-10-29:
 These checks support the source and asset provenance assessment. They do not prove the absence of every possible transformed or short similarity, or determine legal clearance. Standard Electron, terminal and Kubernetes API patterns may naturally resemble other applications using those public interfaces.
 
 The application is not affiliated with, endorsed by or distributed by Lens or Mirantis. Third-party packages are installed from their upstream distributions and keep their own licenses.
+
+For 0.5.3, Lens and Headlamp were used as functionality/interface references. New workspace, resource-detail, SSO and transport modules were implemented in el-d90; recovered application source and assets remain excluded. The local Monaco editor, AWS SDK and official Kubernetes JavaScript client are upstream dependencies, with licenses listed in THIRD_PARTY_NOTICES.md. This statement does not expand the earlier source-comparison checks into a formal clean-room claim.
