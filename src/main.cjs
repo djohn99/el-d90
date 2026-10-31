@@ -19,6 +19,11 @@ const nodeTable=require('./node-table.cjs');
 const clusterResources=require('./cluster-resources.cjs');
 const workloadMetrics=require('./workload-metrics.cjs');
 const resourceHistory=require('./resource-history.cjs');
+const connections=require('./connections.cjs');
+const{Projects}=require('./projects.cjs');
+const appCatalog=require('./app-catalog.cjs'),gitops=require('./gitops.cjs');
+const{Extensions}=require('./extensions.cjs');
+const forms=require('./resource-forms.cjs');
 const workspaceTools=require('./workspace-tools.cjs'),releaseTools=require('./release-tools.cjs'),readRequests=require('./read-requests.cjs');
 const{WorkspacePolicy}=require('./workspace-policy.cjs');
 let appliedSettings=settingsStore.defaults(),settingsError='';
@@ -43,6 +48,11 @@ let window;
 app.setName('el-d90');
 // Keep the existing local profile when upgrading from Harbor.
 app.setPath('userData', process.env.EL_D90_USER_DATA || path.join(app.getPath('appData'), 'Harbor'));
+const projectStore=new Projects(path.join(app.getPath('userData'),'projects.json'));
+const extensionStore=new Extensions(path.join(app.getPath('userData'),'extensions.json'));
+const importPreviews=new Map();
+const awsConnections=new (require('./aws-connections.cjs').AWSConnections)(path.join(app.getPath('userData'),'eks-kubeconfigs'));let awsRegistration=Promise.resolve();
+const ssoDiscovery=new (require('./aws-sso-discovery.cjs').SSODiscovery)(awsConnections,{openExternal:url=>require('electron').shell.openExternal(url)});
 const workspacePolicy=new WorkspacePolicy(path.join(app.getPath('userData'),'workspace-safeguards.json'));
 function trusted(event) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== index) throw new Error('Untrusted request');
@@ -50,7 +60,7 @@ function trusted(event) {
 function handle(channel, fn) {
   ipcMain.handle(channel, async (event, input = {}) => {
     trusted(event);
-    if (demo && !['workspace:state','workspace:policy-set','read:cancel','release:check','release:open','file:save-image','settings:get','settings:appearance-draft','settings:save','settings:pick-kubeconfig','app:restart','app:info', 'file:save','editor:parse','editor:format','editor:diff'].includes(channel)) throw new Error('Demo mode is disconnected from Kubernetes');
+    if (demo && !['resource-data:read','resource-data:write','projects:list','projects:save','projects:remove','extensions:list','extensions:install','extensions:toggle','extensions:remove','catalog:list','editor:form-read','editor:form-write','editor:diagnostics','workspace:state','workspace:policy-set','read:cancel','release:check','release:open','file:save-image','settings:get','settings:appearance-draft','settings:save','settings:pick-kubeconfig','app:restart','app:info', 'file:save','editor:parse','editor:format','editor:diff'].includes(channel)) throw new Error('Demo mode is disconnected from Kubernetes');
     const ownedContext=channel==='session:write'?sessions.entries.get(input.id)?.context:channel==='terminal:write'?streams.get(input.id)?.context:null;
     const request=ownedContext?{...input,context:ownedContext}:input;
     await workspacePolicy.assertAllowed(channel,request);
@@ -98,6 +108,42 @@ handle('settings:appearance-draft',input=>{const value=settingsStore.parse(input
 handle('settings:save',async input=>{const saved=await settingsStore.write(settingsPath(),input.yaml);const restartRequired=JSON.stringify(saved.kubeconfig)!==JSON.stringify(appliedSettings.kubeconfig);settingsError='';return{settings:saved,yaml:settingsStore.stringify(saved),restartRequired};});
 handle('settings:pick-kubeconfig',async()=>{const result=await dialog.showOpenDialog(window,{title:'Choose kubeconfig files',properties:['openFile','multiSelections','showHiddenFiles']});return{cancelled:result.canceled,paths:result.filePaths};});
 handle('app:restart',()=>{if(sessions.entries.size||nodePending.size||nodes.active().length||helmOperations.size||streams.size)throw Error('Close active terminal, log, node and Helm sessions before restarting.');app.relaunch();app.quit();return true;});
+handle('projects:list',()=>projectStore.list());
+handle('projects:save',input=>projectStore.save(input));
+handle('projects:remove',input=>projectStore.remove(input));
+handle('projects:snapshot',input=>projectStore.snapshot(input));
+handle('catalog:list',()=>appCatalog.list());
+handle('catalog:configure',input=>appCatalog.configure(input));
+handle('catalog:open-doc',input=>require('electron').shell.openExternal(appCatalog.docURL(input.id)));
+handle('gitops:snapshot',input=>gitops.snapshot(input));
+handle('extensions:list',()=>extensionStore.list());
+handle('extensions:install',async input=>{const model=require('./extensions-model.js');let manifest;if(input.bundledId!==undefined){manifest=model.bundled();if(input.bundledId!==manifest.id)throw Error('Unknown bundled extension');}else{const selection=await dialog.showOpenDialog(window,{title:'Install or update an el-d90 declarative extension',filters:[{name:'el-d90 extension manifest',extensions:['json']}],properties:['openFile']});if(selection.canceled)return{cancelled:true};const file=selection.filePaths[0],stat=await fs.stat(file);if(!stat.isFile()||stat.size>131072)throw Error('Extension manifest must be a JSON file no larger than 128 KiB');manifest=model.parse(await fs.readFile(file,'utf8'));}const checked=model.normalize(manifest);const answer=await dialog.showMessageBox(window,{type:'question',buttons:['Cancel','Install / update extension'],defaultId:0,cancelId:0,message:'Install declarative extension?',detail:checked.name+' · '+checked.version+'\nExtensions add read-only views, field projections and map relations. They cannot run scripts, send network requests or change cluster resources.'});if(answer.response!==1)return{cancelled:true};return extensionStore.install(checked);});
+handle('extensions:query',input=>extensionStore.query(input));
+handle('extensions:toggle',input=>extensionStore.toggle(input));
+handle('extensions:remove',input=>extensionStore.remove(input));
+handle('editor:form-read',forms.read);
+handle('editor:form-write',forms.write);
+handle('editor:diagnostics',editor.diagnostics);
+for(const [channel,method] of Object.entries({'aws:sso-reopen':'reopen','aws:sso-portals':'portals','aws:sso-start':'start','aws:sso-status':'status','aws:sso-cancel':'cancel','aws:sso-roles':'roles','aws:sso-select':'select'}))handle(channel,input=>ssoDiscovery[method](input));
+handle('aws:profiles',()=>awsConnections.profiles());
+handle('aws:profile-create',input=>awsConnections.createProfile(input));
+handle('aws:login-start',input=>awsConnections.startLogin(input));
+handle('aws:login-status',input=>awsConnections.status(input));
+handle('aws:login-cancel',input=>awsConnections.cancel(input));
+handle('aws:clusters',input=>awsConnections.clusters(input));
+handle('aws:connect',async input=>{
+  const result=await awsConnections.connect(input);
+  const registration=awsRegistration.catch(()=>{}).then(async()=>{
+    const settings=await settingsStore.read(settingsPath());let existing=connections.existingPaths(settings);
+    if(!settings.kubeconfig.paths.length)existing=(await Promise.all(existing.map(async file=>await fs.access(file).then(()=>file,()=>null)))).filter(Boolean);
+    settings.kubeconfig.paths=[...new Set([...existing,result.file])];const saved=await settingsStore.write(settingsPath(),settingsStore.stringify(settings));
+    kube.setKubeconfigPaths(settingsStore.resolvePaths(saved),{preserveCatalogues:true});appliedSettings={...appliedSettings,kubeconfig:saved.kubeconfig};return result;
+  });awsRegistration=registration;return registration;
+});
+handle('connections:overview',()=>connections.overview());
+handle('connections:test',input=>connections.test(input));
+handle('connections:choose',async()=>{const selection=await dialog.showOpenDialog(window,{title:'Import kubeconfig paths',properties:['openFile','multiSelections','showHiddenFiles']});if(selection.canceled)return{cancelled:true};const inspected=await connections.inspectFiles(selection.filePaths),token=randomUUID();for(const[id,p]of importPreviews)if(p.expires<Date.now())importPreviews.delete(id);if(importPreviews.size>=10)importPreviews.delete(importPreviews.keys().next().value);importPreviews.set(token,{...inspected,expires:Date.now()+300000});return{token,...inspected};});
+handle('connections:use',async input=>{const preview=importPreviews.get(input.token);if(!preview||preview.expires<Date.now())throw Error('Choose kubeconfig files again; the import preview expired');const checked=await connections.inspectFiles(preview.files.map(f=>f.path));if(checked.files.some((f,i)=>f.digest!==preview.files[i].digest))throw Error('A kubeconfig file changed after preview. Choose the files again.');const value=await settingsStore.read(settingsPath());let existing=connections.existingPaths(value);if(!value.kubeconfig.paths.length){const available=await Promise.all(existing.map(async p=>await fs.access(p).then(()=>p,()=>null)));existing=available.filter(Boolean);}value.kubeconfig.paths=[...new Set([...existing,...checked.files.map(f=>f.path)])];await settingsStore.write(settingsPath(),settingsStore.stringify(value));importPreviews.delete(input.token);return{restartRequired:true,paths:value.kubeconfig.paths};});
 handle('topology:snapshot',topology.snapshot);
 handle('topology:api',topology.apiInspection);
 handle('editor:parse',editor.parseDocuments);
@@ -153,6 +199,14 @@ handle('forward:start', input => forwards.start(input));
 handle('forward:stop', input => { forwards.stop(input.id); return true; });
 handle('forward:list', () => forwards.list());
 handle('kube:list', kube.list);
+handle('resource-data:read',input=>require('./resource-data.cjs').read(input));
+handle('resource-data:write',input=>require('./resource-data.cjs').write(input));
+handle('secret:reveal', async input => {
+  const context=kube.string(input.context,'context'),namespace=kube.name(input.namespace,'namespace'),name=kube.name(input.name);kube.string(input.uid,'Secret UID');
+  const choice=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Reveal values'],defaultId:0,cancelId:0,message:'Reveal decoded Secret values?',detail:`Secret: ${namespace}/${name}\nContext: ${context}\nValues will be shown locally in the selected detail panel.`});
+  if(choice.response!==1)return{cancelled:true};
+  return require('./secret-values.cjs').reveal(input);
+});
 handle('kube:yaml', async input => {
   if (input.resource === 'secrets' || input.resource?.startsWith('secrets.')) {
     const choice = await dialog.showMessageBox(window, { type: 'warning', buttons: ['Cancel', 'Reveal manifest'], defaultId: 0, cancelId: 0, message: 'Reveal Secret manifest?', detail: `Secret: ${kube.name(input.name)}\nContext: ${kube.string(input.context, 'context')}\nThe YAML contains encoded Secret values.` });
@@ -182,7 +236,7 @@ handle('logs:start', (input,event)=>{
   streams.set(id,{controller,type:'logs',context:input.context});return id;
 });
 handle('terminal:start', (input, event) => startStream(kube.terminalArgs(input), 'terminal', event, input.context));
-handle('workspace:close', async input => {watches.closeContext(input.context);if([...nodePending.values()].some(v=>v.context===input.context))throw new Error('Wait for the pending node session to finish before disconnecting this cluster');await sessions.closeContext(input.context);for (const [id,s] of streams) if (s.context === input.context)await stop(id); for (const item of forwards.list()) if (item.context === input.context) forwards.stop(item.id); return true; });
+handle('workspace:close', async input => {watches.closeContext(input.context);kube.api.closeContext(input.context);if([...nodePending.values()].some(v=>v.context===input.context))throw new Error('Wait for the pending node session to finish before disconnecting this cluster');await sessions.closeContext(input.context);for (const [id,s] of streams) if (s.context === input.context)await stop(id); for (const item of forwards.list()) if (item.context === input.context) forwards.stop(item.id); return true; });
 handle('stream:stop', async input => {await stop(input.id);return true;});
 handle('terminal:resize', input=>{const stream=streams.get(input.id);if(!stream || stream.type!=='terminal')return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw new Error('Invalid terminal dimensions');stream.child.stdio[3].write(`${input.cols} ${input.rows}\n`);return true;});
 handle('terminal:write', input => {
@@ -208,7 +262,7 @@ async function createWindow() {
     if(helmOperations.size){const choice=dialog.showMessageBoxSync(window,{type:'warning',buttons:['Keep app open','Quit anyway'],defaultId:0,cancelId:0,message:'Helm operations are still running.',detail:'Quitting can leave an operation unfinished.'});if(choice===0){event.preventDefault();return;}}
     if(nodes.active().length||sessions.entries.size){event.preventDefault();if(closingNodes)return;closingNodes=true;(async()=>{await sessions.closeAll();for(const id of [...streams.keys()])await stop(id);await Promise.all(nodes.active().map(cleanDebug));await journalWrites.catch(()=>{});if(nodes.active().length){const choice=dialog.showMessageBoxSync(window,{type:'warning',buttons:['Keep app open','Quit and retain recovery records'],defaultId:0,cancelId:0,message:'Some debug Pods could not be cleaned up.',detail:'Their exact identities are saved in Node sessions for retry after restart.'});if(choice===0){closingNodes=false;return;}}allowClose=true;window.close();})().catch(()=>{closingNodes=false;});}
   });
-  window.on('closed', () => {sessions.closeAll().catch(()=>{});watches.close(); for (const id of streams.keys()) stop(id); forwards.close(); window = null; });
+  window.on('closed', () => {awsConnections.close();ssoDiscovery.close();sessions.closeAll().catch(()=>{});watches.close();kube.api.close(); for (const id of streams.keys()) stop(id); forwards.close(); window = null; });
   await window.loadFile(path.join(__dirname, 'index.html'));
 }
 app.whenReady().then(async () => {

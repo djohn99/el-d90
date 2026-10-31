@@ -16,3 +16,5 @@ __pycache__/
 *.key
 *.p12
 *.pfx
+
+assets/monaco/

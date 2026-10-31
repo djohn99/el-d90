@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "eld90.workload-ownership",
+  "name": "Workload ownership",
+  "version": "1.0.0",
+  "description": "A metadata-only Pod ownership page, detail section, table column and namespace-scoped owner UID map relation.",
+  "contributions": {
+    "pages": [
+      {
+        "id": "pod-owners",
+        "title": "Pod ownership",
+        "resource": "pods",
+        "fields": [
+          {
+            "id": "pod-name",
+            "title": "Pod",
+            "path": "metadata.name"
+          },
+          {
+            "id": "owner-name",
+            "title": "Owner",
+            "path": [
+              "metadata",
+              "ownerReferences",
+              "*",
+              "name"
+            ]
+          },
+          {
+            "id": "phase",
+            "title": "Phase",
+            "path": "status.phase"
+          }
+        ]
+      }
+    ],
+    "details": [
+      {
+        "id": "ownership-details",
+        "title": "Controller ownership",
+        "resource": "pods",
+        "fields": [
+          {
+            "id": "owners",
+            "title": "Owner references",
+            "path": "metadata.ownerReferences"
+          }
+        ]
+      }
+    ],
+    "columns": [
+      {
+        "id": "owner-kind",
+        "title": "Owner kind",
+        "resource": "pods",
+        "path": [
+          "metadata",
+          "ownerReferences",
+          "*",
+          "kind"
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "id": "pod-replicaset",
+        "title": "owner UID",
+        "fromResource": "pods",
+        "toResource": "replicasets",
+        "fromPath": [
+          "metadata",
+          "ownerReferences",
+          "*",
+          "uid"
+        ],
+        "toPath": "metadata.uid"
+      }
+    ]
+  }
+}

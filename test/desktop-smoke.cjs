@@ -76,7 +76,7 @@ function alive(pid) { try { process.kill(pid, 0); return true; } catch { return 
     const terminalPid = calls().find(c => c.args.includes('exec')).pid;
     await page.getByRole('button', { name: 'Close details' }).click();
     await waitFor(() => !alive(logPid) && !alive(terminalPid));
-    await page.locator('.nav-item[data-view="resources"]').click();
+    await page.locator('.sidebar-group[data-group="ADVANCED"] > summary').click();await page.locator('.nav-item[data-view="resources"]').click();
     await page.locator('#resource-type').selectOption('widgets.example.test');
     await page.getByRole('button', { name: 'Open fixture-widget', exact: true }).waitFor();
     await page.locator('.nav-item[data-view="metrics"]').click();

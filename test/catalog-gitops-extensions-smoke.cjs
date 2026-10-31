@@ -1,0 +1,43 @@
+const{_electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'el-d90-catalog-gitops-extensions-'));let app;
+(async()=>{try{
+ app=await _electron.launch({executablePath:process.env.EL_D90_APP_EXECUTABLE||require('electron'),args:[...(process.env.EL_D90_APP_EXECUTABLE?[]:[root]),'--demo'],cwd:root,env:{...process.env,ELECTRON_RUN_AS_NODE:'',EL_D90_USER_DATA:path.join(temp,'profile'),EL_D90_KUBECTL:path.join(root,'test/mock-kubectl.cjs')}});
+ const page=await app.firstWindow();page.setDefaultTimeout(20000);await page.setViewportSize({width:1500,height:1000});const errors=[];page.on('pageerror',e=>errors.push(e.message));await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});await page.waitForFunction(()=>typeof state!=='undefined'&&state.initialized&&!state.loading);
+ const nav=async view=>{const group=page.locator('.sidebar-group[data-group="ADVANCED"]');if(!await group.evaluate(e=>e.open))await group.locator('summary').click();await page.locator('[data-view="'+view+'"]').click();await page.waitForFunction(view=>state.view===view&&!state.loading,view);};
+ await nav('catalog');assert.equal(await page.locator('[data-catalog-app]').count(),3);await page.locator('#catalog-category').selectOption('Security');assert.equal(await page.locator('[data-catalog-app]').count(),1);await page.locator('[data-catalog-app="cert-manager"]').click();await page.locator('#catalog-handoff').waitFor({state:'visible'});await page.waitForFunction(()=>!document.querySelector('#catalog-handoff').disabled);assert.equal(await page.locator('#catalog-version').inputValue(),'1.0.0');await page.locator('#catalog-values').fill('replicaCount: 3\n');await page.locator('#catalog-handoff').click();await page.waitForFunction(()=>state.view==='helm'&&!state.loading);assert.equal(await page.locator('#helm-install-chart').inputValue(),'demo/cert-manager');assert.equal(await page.locator('#helm-install-version').inputValue(),'1.0.0');assert.equal(await page.locator('#helm-install-namespace').inputValue(),'cert-manager');assert.equal(await page.locator('#helm-install-values').inputValue(),'replicaCount: 3\n');
+ await nav('gitops');assert.equal(await page.locator('[data-gitops-row]').count(),2);await page.locator('[data-gitops-row="0"]').click();assert.match(await page.locator('#gitops-details').textContent(),/Synced/);await page.locator('[data-managed="0"]').click();await page.locator('#drawer').waitFor({state:'visible'});assert.equal(await page.locator('#detail-name').textContent(),'web-frontend');await page.locator('#close-drawer').click();await page.locator('#gitops-provider').selectOption('Flux');assert.equal(await page.locator('[data-gitops-row]').count(),1);await page.locator('[data-gitops-row="1"]').click();assert.match(await page.locator('#gitops-details').textContent(),/DependencyNotReady/);
+ await nav('extensions');await page.locator('#extension-example').click();await page.locator('[data-extension-toggle="eld90.workload-ownership"]').waitFor();await page.locator('[data-extension-page="pod-owners"]').click();await page.waitForFunction(()=>state.view==='extension-page'&&!state.loading);assert.ok(await page.locator('#extension-page-table tbody tr').count()>0);await page.locator('[data-extension-open]').first().click();await page.locator('#drawer').waitFor({state:'visible'});assert.match(await page.locator('#extension-details').textContent(),/Controller ownership/);await page.locator('#close-drawer').click();await nav('pods');assert.equal(await page.locator('#resource-table th').filter({hasText:'Owner kind'}).count(),1);await page.locator('#resource-table .node-column-picker summary').click();await page.locator('#resource-table').getByLabel('Show Owner kind column',{exact:true}).uncheck();await page.locator('#page-title').click();assert.ok(await page.locator('#resource-table td[data-pod-column^="extension:"]').evaluateAll(nodes=>nodes.every(n=>n.hidden)));
+ await page.reload();await page.waitForFunction(()=>typeof state!=='undefined'&&state.initialized&&!state.loading);await page.locator('[data-extension-page="pod-owners"]').waitFor();const value=require('../src/extensions-model.js').bundled();value.version='1.1.0';value.description='Updated local metadata extension';const update=path.join(temp,'update.json');fs.writeFileSync(update,JSON.stringify(value));await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});dialog.showMessageBox=async()=>({response:1});},update);await nav('extensions');await page.locator('#extension-install').click();await page.locator('#extension-list').filter({hasText:'1.1.0'}).waitFor();
+ const bad=path.join(temp,'bad.json');fs.writeFileSync(bad,JSON.stringify({...value,script:'window.EXTENSION_ATTACK=true'}));await app.evaluate(({dialog},file)=>dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]}),bad);await page.locator('#extension-install').click();await page.locator('#extension-status').filter({hasText:'Unsupported manifest field'}).waitFor();assert.equal(await page.evaluate(()=>window.EXTENSION_ATTACK),undefined);await page.locator('[data-extension-toggle="eld90.workload-ownership"]').uncheck();await page.waitForFunction(()=>!document.querySelector('[data-extension-page="pod-owners"]'));await nav('pods');assert.equal(await page.locator('#resource-table th').filter({hasText:'Owner kind'}).count(),0);await nav('extensions');await page.locator('[data-extension-remove="eld90.workload-ownership"]').click();await page.waitForFunction(()=>document.querySelector('#extension-list').textContent.includes('No extensions installed'));assert.deepEqual(errors,[]);
+ // Deterministic renderer races: pause the awaited boundary, then simulate newer user intent.
+ const races=await page.evaluate(async()=>{
+  const saved={state,selectContext,navigate,openRelatedResource,workspaceIntent};const result={};
+  try{
+   let release,opened=0;const contexts=[{name:'race-a'},{name:'race-b'}];
+   state={context:'race-b',contexts,generation:1};
+   selectContext=context=>{++workspaceIntent;state={context,contexts,generation:2};return new Promise(resolve=>release=resolve);};
+   openRelatedResource=async()=>{opened++;};
+   const pending=openFeatureResource({context:'race-a',resource:'pods',name:'same-name',namespace:'default'});
+   state={context:'race-b',contexts,generation:3};++workspaceIntent;release();await pending;result.crossClusterOpens=opened;
+   state={context:'race-a',contexts,generation:4};
+   selectContext=()=>{throw Error('Unexpected context selection');};
+   const same=openFeatureResource({context:'race-a',resource:'pods',name:'same-name'});++workspaceIntent;await same;result.newerIntentOpens=opened;
+   state={context:'race-a',contexts,view:'catalog',generation:5};
+   navigate=()=>{++workspaceIntent;state.view='helm';state.generation=6;return new Promise(resolve=>release=resolve);};
+   const originalPanel=document.querySelector('#helm-install-panel');
+   const panel=document.createElement('details');panel.id='helm-install-panel';document.body.append(panel);
+   try{
+    const stale=configureCatalogChart({name:'stale',chart:'demo/stale',values:'stale'});
+    state.view='pods';++workspaceIntent;state.generation=7;release(6);await stale;result.staleCatalogOpened=panel.open;
+    state.view='catalog';state.generation=8;
+    const newer=configureCatalogChart({name:'stale',chart:'demo/stale'});
+    // Same Helm view and same workspace still must reject a newer refresh generation.
+    state.generation=9;release(6);await newer;result.newerGenerationOpened=panel.open;
+   }finally{panel.remove();}
+   if(originalPanel)throw Error('Race fixture expected no existing Helm form');
+  }finally{state=saved.state;selectContext=saved.selectContext;navigate=saved.navigate;openRelatedResource=saved.openRelatedResource;workspaceIntent=saved.workspaceIntent;}
+  return result;
+ });
+ assert.deepEqual(races,{crossClusterOpens:0,newerIntentOpens:0,staleCatalogOpened:false,newerGenerationOpened:false});
+ console.log('PASS: catalog category/version/value handoff to Helm, read-only Argo/Flux status and verified resource navigation, extension install/update/disable/remove persistence, resource page/details/columns, independent column hiding, executable manifest rejection, cross-cluster/newer-intent navigation suppression, and stale catalog handoff suppression');
+ }finally{await app?.close();fs.rmSync(temp,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -2,11 +2,15 @@
 const $ = id => document.getElementById(id);
 const API_VIEWS={'gateway-api':{title:'Gateway API',resources:['gateways.gateway.networking.k8s.io','gatewayclasses.gateway.networking.k8s.io','httproutes.gateway.networking.k8s.io','grpcroutes.gateway.networking.k8s.io','tcproutes.gateway.networking.k8s.io','tlsroutes.gateway.networking.k8s.io','udproutes.gateway.networking.k8s.io','referencegrants.gateway.networking.k8s.io']},'admission-api':{title:'Admission',resources:['validatingwebhookconfigurations.admissionregistration.k8s.io','mutatingwebhookconfigurations.admissionregistration.k8s.io','validatingadmissionpolicies.admissionregistration.k8s.io','validatingadmissionpolicybindings.admissionregistration.k8s.io','mutatingadmissionpolicies.admissionregistration.k8s.io','mutatingadmissionpolicybindings.admissionregistration.k8s.io']},'device-api':{title:'Devices / DRA',resources:['deviceclasses.resource.k8s.io','resourceclaims.resource.k8s.io','resourceclaimtemplates.resource.k8s.io','resourceslices.resource.k8s.io']}};
 const WORKSPACE_VIEWS=['issues','saved','search','changes','updates'];
-const SPECIAL_VIEWS=[...WORKSPACE_VIEWS,'cluster','map','metrics','helm','forwards','applications','node-sessions',...Object.keys(API_VIEWS)];
-const titles = { issues:'Troubleshooting',saved:'Favorites & views',search:'Global search',changes:'Change history',updates:'Updates & setup',cluster:'Cluster', map:'Resource map', applications:'Applications', 'node-sessions':'Node sessions',...Object.fromEntries(Object.entries(API_VIEWS).map(([key,v])=>[key,v.title])), overview: 'Overview', pods: 'Pods', deployments: 'Deployments', statefulsets: 'StatefulSets', daemonsets: 'DaemonSets', jobs: 'Jobs', cronjobs: 'CronJobs', services: 'Services', ingresses: 'Ingresses', configmaps: 'ConfigMaps', persistentvolumeclaims: 'Volumes', nodes: 'Nodes', namespaces: 'Namespaces', events: 'Events', replicasets: 'ReplicaSets', replicationcontrollers: 'ReplicationControllers', horizontalpodautoscalers: 'Autoscalers', poddisruptionbudgets: 'Disruption budgets', secrets: 'Secrets', resourcequotas: 'Resource quotas', limitranges: 'Limit ranges', serviceaccounts: 'Service accounts', endpoints: 'Endpoints', endpointslices: 'EndpointSlices', networkpolicies: 'Network policies', persistentvolumes: 'Persistent volumes', storageclasses: 'Storage classes', roles: 'Roles', rolebindings: 'Role bindings', clusterroles: 'Cluster roles', clusterrolebindings: 'Cluster role bindings', customresourcedefinitions: 'Custom definitions', resources: 'API explorer', metrics: 'Metrics', helm: 'Helm releases', forwards: 'Port forwards' };
+const FEATURE_VIEWS=['projects','catalog','gitops','extensions','connections','extension-page'];
+const NO_CONTEXT_VIEWS=['updates','saved','search','projects','catalog','extensions','connections'];
+let richEditor,resourceForms,extensionCache=[];
+const SPECIAL_VIEWS=[...FEATURE_VIEWS,...WORKSPACE_VIEWS,'cluster','map','metrics','helm','forwards','applications','node-sessions',...Object.keys(API_VIEWS)];
+const titles = {projects:'Projects',catalog:'App catalog',gitops:'GitOps',extensions:'Extensions',connections:'Connect clusters','extension-page':'Extension page', issues:'Troubleshooting',saved:'Favorites & views',search:'Global search',changes:'Change history',updates:'Updates & setup',cluster:'Cluster', map:'Resource map', applications:'Applications', 'node-sessions':'Node sessions',...Object.fromEntries(Object.entries(API_VIEWS).map(([key,v])=>[key,v.title])), overview: 'Overview', pods: 'Pods', deployments: 'Deployments', statefulsets: 'StatefulSets', daemonsets: 'DaemonSets', jobs: 'Jobs', cronjobs: 'CronJobs', services: 'Services', ingresses: 'Ingresses', configmaps: 'ConfigMaps', persistentvolumeclaims: 'Volumes', nodes: 'Nodes', namespaces: 'Namespaces', events: 'Events', replicasets: 'ReplicaSets', replicationcontrollers: 'ReplicationControllers', horizontalpodautoscalers: 'Horizontal Pod Autoscalers (HPA)', 'verticalpodautoscalers.autoscaling.k8s.io': 'Vertical Pod Autoscalers (VPA)', poddisruptionbudgets: 'Disruption budgets', secrets: 'Secrets', resourcequotas: 'Resource quotas', limitranges: 'Limit ranges', serviceaccounts: 'Service accounts', endpoints: 'Endpoints', endpointslices: 'EndpointSlices', networkpolicies: 'Network policies', persistentvolumes: 'Persistent volumes', storageclasses: 'Storage classes', roles: 'Roles', rolebindings: 'Role bindings', clusterroles: 'Cluster roles', clusterrolebindings: 'Cluster role bindings', customresourcedefinitions: 'Custom definitions', resources: 'API explorer', metrics: 'Metrics', helm: 'Helm releases', forwards: 'Port forwards' };
 const dismissedDrafts=new Map();
 function draftKey(object=state.selected,kind=state.selectedKind){return JSON.stringify([state.demo,state.context,state.isCreating?'create':kind,state.isCreating?'':object?.metadata?.namespace,state.isCreating?'':object?.metadata?.name]);}
-function keepDismissedDraft(){if(!$('drawer').classList.contains('hidden')&&state.tab==='yaml'){if($('yaml-editor').value===(state.originalYaml||'')){dismissedDrafts.delete(draftKey());return;}dismissedDrafts.set(draftKey(),{yaml:$('yaml-editor').value,original:state.originalYaml||''});}}
+function keepDismissedDraft(){if(!$('drawer').classList.contains('hidden')&&(state.selected||state.isCreating)){if($('yaml-editor').value===(state.originalYaml||'')){dismissedDrafts.delete(draftKey());return;}dismissedDrafts.set(draftKey(),{yaml:$('yaml-editor').value,original:state.originalYaml||''});}}
+let workspaceIntent=0;
 let requestEpoch = 0, detailEpoch = 0;let sessionUI,workspaceUI,detailLogViewer,lastResourceView=null,searchTimer=null;
 let state = { demo: false, forcedDemo: false, context: '', namespace: '*', view: 'overview', items: [], selected: null, selectedKind: '', tab: 'summary', generation: 0, detailGeneration: 0, streamGeneration: 0, logs: null, terminal: null, terminalInstance: null, loading: false, contexts: [], catalogue: [], dynamicResource: '', namespaceError: '', namespacesKnown: false, discoveryError: '', namespaces: [], namespaceNames: [], logText: '', historySettings: {}, initialized: false };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
@@ -65,7 +69,7 @@ async function stopStreams() {
   const ids = [state.logs, state.terminal].filter(Boolean); state.logs = null; state.terminal = null;
   await Promise.all(ids.map(id => invoke('stream:stop', { id }).catch(() => {})));
 }
-async function closeDrawer() {keepDismissedDraft();window.elD90History.stop($('detail-metrics')); state.detailGeneration = ++detailEpoch; state.selected = null; hidden('drawer', true); await stopStreams(); }
+async function closeDrawer() {window.elD90SecretValues.clear();window.elD90ResourceData.clear();keepDismissedDraft();window.elD90History.stop($('detail-metrics')); state.detailGeneration = ++detailEpoch; state.selected = null; hidden('drawer', true); await stopStreams(); }
 async function initializeContext(context) {
   state.loading=true;hidden('busy',false);
   await closeDrawer();state.readRequestId=crypto.randomUUID(); state.generation = ++requestEpoch;
@@ -84,11 +88,11 @@ async function initializeContext(context) {
   if (state.context === selected) { await discovery; if(state.context === selected) { state.initialized=true; await refresh(); saveWorkspacePreferences(); } }
 }
 function renderTable(target, items, kind, max = Infinity) {
-  if(kind==='pods')return window.elD90PodTable.render($(target),items.slice(0,max),state.podTableData||{},{escape,age,health,onOpen:pod=>openDetail(pod,'pods'),enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
-  if(kind==='nodes')return window.elD90NodeTable.render($(target),items.slice(0,max),state.nodeTableData||{},{escape,age,onOpen:node=>openDetail(node,'nodes'),onShell:async node=>{await openDetail(node,'nodes');await tab('terminal');},enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
+  if(kind==='pods')return window.elD90PodTable.render($(target),items.slice(0,max),state.podTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:pod=>openDetail(pod,'pods'),enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
+  if(kind==='nodes')return window.elD90NodeTable.render($(target),items.slice(0,max),state.nodeTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,onOpen:node=>openDetail(node,'nodes'),onShell:async node=>{await openDetail(node,'nodes');await tab('terminal');},enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
   if(kind==='customresourcedefinitions')return renderCustomDefinitions(target,items);
   if(kind==='events'||kind?.startsWith('events.'))return renderEventsTable(target,items,max);
-  return window.elD90Columns.render($(target),items.slice(0,max),kind,{escape,age,health,onOpen:object=>openDetail(object,kind),enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
+  return window.elD90Columns.render($(target),items.slice(0,max),kind,{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:object=>openDetail(object,kind),enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
 }
 function renderOverview(results) {
   const [pods, deployments, nodes, events] = results.map(r => r.status === 'fulfilled' ? r.value.items || [] : []);
@@ -110,7 +114,7 @@ function renderOverview(results) {
 }
 async function loadPodTableData(owner,items){const generation=owner.generation;if(owner.demo){const metrics={};for(const pod of items)metrics[pod.metadata.namespace+'/'+pod.metadata.name]={containers:[{cpu:'25m',memory:'32Mi'}]};owner.podTableData={metrics,warnings:[]};}else{try{const value=await invoke('pods:table-data',{context:owner.context,namespaces:[...owner.namespaces]});if(owner.generation===generation)owner.podTableData=value;}catch(e){if(owner.generation===generation)owner.podTableData={warnings:[e.message]};}}}
 async function refresh() {
-  if (!state.context){if(['updates','saved','search'].includes(state.view)){hidden('welcome',true);hidden('overview',true);hidden('resource-view',true);hidden('special-view',false);state.generation=++requestEpoch;await renderSpecial(state.generation);}return;}
+  if (!state.context){if(NO_CONTEXT_VIEWS.includes(state.view)){hidden('welcome',true);hidden('overview',true);hidden('resource-view',true);hidden('special-view',false);state.generation=++requestEpoch;await renderSpecial(state.generation);}return;}
   if(state.readRequestId)invoke('read:cancel',{context:state.context,requestId:state.readRequestId}).catch(()=>{});state.readRequestId=crypto.randomUUID();
   const generation = state.generation = ++requestEpoch; state.loading = true; hidden('busy', false);
   hidden('welcome', true); hidden('overview', state.view !== 'overview'); hidden('resource-view', state.view === 'overview' || SPECIAL_VIEWS.includes(state.view)); hidden('special-view', !SPECIAL_VIEWS.includes(state.view)); hidden('api-resource-picker', state.view !== 'resources');
@@ -121,7 +125,7 @@ async function refresh() {
       const podMetrics=state.demo?null:loadPodTableData(state,[]);
       const results = await Promise.allSettled(['pods', 'deployments', 'nodes', 'events'].map(list));
       if (generation !== state.generation) return;
-      await (podMetrics||loadPodTableData(state,results[0].status==='fulfilled'?results[0].value.items||[]:[]));if(generation!==state.generation)return;state.overviewResults=results; renderOverview(results);
+      const overviewOwner=state;if(overviewOwner.demo)await loadPodTableData(overviewOwner,results[0].status==='fulfilled'?results[0].value.items||[]:[]);state.overviewResults=results;renderOverview(results);if(podMetrics)podMetrics.then(()=>{if(state===overviewOwner&&generation===overviewOwner.generation&&state.view==='overview')renderOverview(results);}).catch(()=>{});
       const failures = results.map((r, i) => r.status === 'rejected' ? `${['Pods', 'Deployments', 'Nodes', 'Events'][i]}: ${r.reason.message}` : null).filter(Boolean);
       if (failures.length) notice(failures.join('\n')); else if (!state.demo) notice();
       connection(state.demo ? 'Demo · sample data' : failures.length === 4 ? 'Connection failed' : failures.length || state.namespaceError ? 'Connected · partial data' : 'Connected', failures.length < 4);
@@ -129,14 +133,26 @@ async function refresh() {
       await renderSpecial(generation);if(generation!==state.generation)return;$('special-content').querySelectorAll('table').forEach((table,i)=>window.elD90Productivity.enhanceTable(table.parentElement,{storageKey:'special:'+state.view+':'+i,onExport:text=>invoke('file:save',{text})}));
     } else {
       const kind = activeResource(); if (!kind) { $('resource-table').innerHTML = '<div class="empty">No discoverable listable resources. See API discovery status above.</div>'; return; }
+      if(kind==='verticalpodautoscalers.autoscaling.k8s.io'&&!state.catalogue.some(r=>r.key===kind)){
+        state.items=[];state.listWarnings=[];$('resource-count').textContent='Unavailable';$('resource-table').innerHTML='<div class="empty">VPA is not advertised by this cluster. The Vertical Pod Autoscaler CRD/controller may not be installed, or API discovery is restricted. No autoscaler was installed or changed.</div>';notice();await syncWorkspaceWatches(state);return;
+      }
       const owner=state,resultRequest=list(kind);
+      // Optional metrics never block resource first paint or navigation.
+      if(!owner.demo&&kind==='pods')owner.podTableData={metrics:{},warnings:[]};
+      if(!owner.demo&&kind==='nodes')owner.nodeTableData={metrics:{},podCounts:{},warnings:[]};
       const extraRequest=owner.demo?null:kind==='pods'?loadPodTableData(owner,[]):kind==='nodes'?invoke('nodes:table-data',{context:owner.context}).then(value=>{if(owner.generation===generation)owner.nodeTableData=value;},e=>{if(owner.generation===generation)owner.nodeTableData={warnings:[e.message]};}):kind==='deployments'?invoke('deployments:metrics',{context:owner.context,namespaces:[...owner.namespaces]}).catch(e=>({deployments:{},warnings:[e.message]})):null;
-      const result = await resultRequest;
-      if (generation !== state.generation) return;
-      if(kind==='pods'){await (extraRequest||loadPodTableData(state,result.items||[]));if(generation!==state.generation)return;result.warnings=[...(result.warnings||[]),...(state.podTableData.warnings||[])];}
-      if(kind==='nodes'){if(state.demo){const metrics={};for(const node of result.items||[])metrics[node.metadata.name]={cpu:'750m',memory:'2Gi'};const podCounts={};for(const pod of window.demoWorkspace.list('pods','*').items)if(pod.spec?.nodeName&&!['Succeeded','Failed'].includes(pod.status?.phase))podCounts[pod.spec.nodeName]=(podCounts[pod.spec.nodeName]||0)+1;state.nodeTableData={metrics,podCounts,podsAvailable:true,warnings:[]};}else{await extraRequest;if(generation!==state.generation)return;}result.warnings=[...(result.warnings||[]),...(state.nodeTableData.warnings||[])];}
-      if(kind==='deployments'){const owner=state;let usage;if(owner.demo){usage={deployments:{},warnings:[]};for(const d of result.items||[])usage.deployments[d.metadata.namespace+'/'+d.metadata.name]={cpu:(d.status?.readyReplicas||0)*.025,memory:(d.status?.readyReplicas||0)*32*1024**2,pods:d.status?.readyReplicas||0,cpuSamples:d.status?.readyReplicas||0,memorySamples:d.status?.readyReplicas||0};}else{usage=await extraRequest;if(generation!==state.generation)return;}result.items=(result.items||[]).map(r=>({...r,_elD90Usage:usage.deployments[r.metadata.namespace+'/'+r.metadata.name]||null}));result.warnings=[...(result.warnings||[]),...(usage.warnings||[])];}
-      state.items = result.items || []; syncSelectedResource(state,kind,state.items); state.listWarnings=result.warnings || []; filterTable(); if (state.listWarnings.length) notice(state.listWarnings.join('\n')); else if (!state.demo) notice(); connection(state.demo ? 'Demo · sample data' : state.namespaceError || state.listWarnings?.length ? 'Connected · partial data' : 'Connected', true);
+      const result=await resultRequest;if(state!==owner||generation!==owner.generation)return;
+      if(owner.demo&&kind==='pods')await loadPodTableData(owner,result.items||[]);
+      if(owner.demo&&kind==='nodes'){const metrics={};for(const node of result.items||[])metrics[node.metadata.name]={cpu:'750m',memory:'2Gi'};const podCounts={};for(const pod of window.demoWorkspace.list('pods','*').items)if(pod.spec?.nodeName&&!['Succeeded','Failed'].includes(pod.status?.phase))podCounts[pod.spec.nodeName]=(podCounts[pod.spec.nodeName]||0)+1;owner.nodeTableData={metrics,podCounts,podsAvailable:true,warnings:[]};}
+      if(owner.demo&&kind==='deployments')for(const d of result.items||[])d._elD90Usage={cpu:(d.status?.readyReplicas||0)*.025,memory:(d.status?.readyReplicas||0)*32*1024**2,pods:d.status?.readyReplicas||0,cpuSamples:d.status?.readyReplicas||0,memorySamples:d.status?.readyReplicas||0};
+      owner.items=result.items||[];syncSelectedResource(owner,kind,owner.items);owner.listWarnings=result.warnings||[];filterTable();if(owner.listWarnings.length)notice(owner.listWarnings.join('\n'));else if(!owner.demo)notice();connection(owner.demo?'Demo · sample data':owner.namespaceError||owner.listWarnings.length?'Connected · partial data':'Connected',true);
+      if(extraRequest)extraRequest.then(usage=>{
+        if(state!==owner||owner.generation!==generation||activeResource()!==kind)return;
+        if(kind==='deployments')owner.items=owner.items.map(r=>({...r,_elD90Usage:usage.deployments[r.metadata.namespace+'/'+r.metadata.name]||null}));
+        const warnings=kind==='pods'?owner.podTableData.warnings:kind==='nodes'?owner.nodeTableData.warnings:usage.warnings;
+        owner.listWarnings=[...new Set([...(result.warnings||[]),...(warnings||[])])];filterTable();syncSelectedResource(owner,kind,owner.items);if(owner.listWarnings.length)notice(owner.listWarnings.join('\n'));connection(owner.namespaceError||owner.listWarnings.length?'Connected · partial data':'Connected',true);
+      }).catch(()=>{});
+
     }
     if(generation!==state.generation)return;
     await syncWorkspaceWatches(state);if(generation!==state.generation)return;
@@ -159,17 +175,41 @@ function updatePageHeading(){
  if(cluster){hidden('namespace-popover',true);$('namespace-multi').setAttribute('aria-expanded','false');}
 }
 async function navigate(view) {
+  ++workspaceIntent;
   if(!WORKSPACE_VIEWS.includes(state.view))lastResourceView=captureView();workspaceUI?.cancel();window.elD90History.stopContext(state.context);clearTimeout(searchTimer);
   document.querySelector('main').scrollTop=0;state.view = view;$('page-title').innerHTML = `${escape(titles[view] || view)}<span class="heading-dot">.</span>`;
   updatePageHeading();
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  $('search').value = '';state.search='';$('status-filter').value='';state.statusFilter='';$('label-filter').value='';state.labelFilter=''; await closeDrawer(); saveWorkspacePreferences(); if (state.context||['updates','saved','search'].includes(view)) await refresh();
+  $('search').value = '';state.search='';$('status-filter').value='';state.statusFilter='';$('label-filter').value='';state.labelFilter=''; await closeDrawer(); saveWorkspacePreferences(); if (state.context||NO_CONTEXT_VIEWS.includes(view)){const pending=refresh(),generation=state.generation;await pending;return generation;}
 }
+function paintResourceSummary(object,kind){
+  let core=$('resource-summary-core');if(!core){core=document.createElement('section');core.id='resource-summary-core';$('detail-summary').prepend(core);}
+  const model=window.elD90ResourceDetails.model(object,kind),status=health(object).label;
+  const fields=[...model.fields];if(status!=='Not reported')fields.splice(2,0,{label:'Status',value:status});
+  core.innerHTML='<dl>'+fields.map(f=>'<dt>'+escape(f.label)+'</dt><dd data-summary-field="'+escape(f.label.toLowerCase())+'">'+escape(f.value)+'</dd>').join('')+'</dl>'+(model.labels.length?'<h3>Labels</h3>'+model.labels.map(v=>'<span class="tag">'+escape(v.key)+'='+escape(v.value)+'</span>').join(''):'')+(model.annotations.length?'<details class="resource-annotations"><summary>Annotations · '+model.annotations.length+'</summary><dl>'+model.annotations.map(v=>'<dt>'+escape(v.key)+'</dt><dd>'+escape(v.value)+'</dd>').join('')+'</dl></details>':'')+(model.containers.length?'<h3>Containers</h3>'+model.containers.map(c=>'<details class="resource-container" open><summary>'+escape(c.name)+' · '+escape(c.type)+'</summary><dl><dt>Image</dt><dd>'+escape(c.image)+'</dd>'+c.fields.map(f=>'<dt>'+escape(f.label)+'</dt><dd>'+escape(f.value)+'</dd>').join('')+'</dl></details>').join(''):'');
+  if(model.references.length){const host=document.createElement('section');host.innerHTML='<h3>Related references</h3>';const owner=state;for(const ref of model.references){const group=ref.apiVersion?.includes('/')?ref.apiVersion.split('/')[0]:ref.apiVersion?'':null;const entry=owner.catalogue.find(r=>r.kind===ref.kind&&(group===null||r.group===group||!group&&!r.group));const button=document.createElement('button');button.className='button secondary resource-reference';button.textContent=ref.kind+' / '+ref.name+(ref.namespace?' · '+ref.namespace:'');button.disabled=!entry;button.title=entry?'Open the declared reference':'This API kind is not available in discovery';button.onclick=()=>openRelatedResource(owner,{...ref,resource:entry.key,context:owner.context,namespace:entry.namespaced?ref.namespace||object.metadata.namespace:''});host.append(button);}core.append(host);}
+}
+function hasYamlDraft(){return !!$('yaml-editor').value&&$('yaml-editor').value!==(state.originalYaml||'');}
+function stageDataYaml(owner,object,epoch,draft){if(state!==owner||owner.detailGeneration!==epoch||owner.selected?.metadata.uid!==object.metadata.uid)return;if(hasYamlDraft())throw Error('The YAML editor has a newer draft. Review it first.');owner.originalYaml=draft.original;$('yaml-editor').value=draft.text;editorTools?.clear();tab('yaml').catch(error);}
+function attachResourceData(object,kind){
+  if(object.kind!=='ConfigMap')return;const owner=state,epoch=owner.detailGeneration,host=document.createElement('section');host.id='resource-data-section';host.innerHTML='<h3>Data & binary data</h3>';$('detail-summary').insertBefore(host,$('resource-summary-core')?.nextSibling||null);
+  window.elD90ResourceData.attach(host,{object,demo:owner.demo,invoke,input:detailInput(),identity:{kind:object.kind,name:object.metadata.name,namespace:object.metadata.namespace,uid:object.metadata.uid},hasDraft:hasYamlDraft,isCurrent:()=>state===owner&&owner.detailGeneration===epoch&&!$('drawer').classList.contains('hidden'),onReview:draft=>stageDataYaml(owner,object,epoch,draft)});
+}
+async function stageSecretKey(owner,object,edit,epoch){
+  const current=()=>state===owner&&owner.detailGeneration===epoch&&owner.selected?.metadata.uid===object.metadata.uid;
+  if(!current())return;if(hasYamlDraft())throw Error('Review or reset the existing YAML draft first.');
+  const identity={kind:'Secret',name:object.metadata.name,namespace:object.metadata.namespace,uid:object.metadata.uid};
+  const text=owner.demo?JSON.stringify({...object,data:{username:btoa('demo-user'),password:btoa('demo-password-only')}},null,2):await invoke('kube:yaml',{context:owner.context,namespace:identity.namespace,resource:'secrets',name:identity.name});if(!current())return;
+  const parsed=await invoke('resource-data:read',{text,identity});if(!current())return;
+  const field=parsed.fields.find(f=>f.key===edit.key);if(!field)throw Error('This data key no longer exists. Refresh the Secret.');
+  if(edit.encoding==='UTF-8'){const bytes=new TextEncoder().encode(edit.value);let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));field.value=btoa(binary);}else field.value=edit.value;
+  const draft=await invoke('resource-data:write',{text,identity,fields:parsed.fields});if(current())stageDataYaml(owner,object,epoch,{original:text,text:draft.text});
+}
+
 async function openDetail(object, kind, restoring = false) {
   if (!restoring) await closeDrawer(); state.originalYaml='';editorTools?.clear();state.isCreating=false; hidden('create-controls',true);state.selected = structuredClone(object); state.selectedKind = kind;
   $('detail-kind').textContent = object.kind; $('detail-name').textContent = object.metadata.name; $('detail-scope').textContent = `${state.context} / ${object.metadata.namespace || 'cluster scoped'}`;
-  const rows = [['Name', object.metadata.name], ['Namespace', object.metadata.namespace || 'Cluster scoped'], ['Status', health(object).label], ['Created', object.metadata.creationTimestamp], ['UID', object.metadata.uid || '—'], ['Node', object.spec?.nodeName || '—'], ['IP', object.status?.podIP || object.spec?.clusterIP || '—']];
-  $('detail-summary').innerHTML = `<dl>${rows.map(([a, b]) => `<dt>${a}</dt><dd data-summary-field="${escape(a.toLowerCase())}">${escape(b)}</dd>`).join('')}</dl><h3>Labels</h3>${Object.entries(object.metadata.labels || {}).map(([k, v]) => `<span class="tag">${escape(k)}=${escape(v)}</span>`).join('') || '<p>No labels</p>'}<h3>Containers</h3>${window.elD90WorkloadHistory.containers(object).map(c => `<dl><dt>${escape(c.name)}</dt><dd>${escape(c.image)}</dd></dl>`).join('') || '<p>No workload containers reported</p>'}`;
+  $('detail-summary').replaceChildren();paintResourceSummary(object,kind);
   const containers=window.elD90WorkloadHistory.containers(object);
   for (const id of ['log-container', 'terminal-container']) $(id).innerHTML = (id==='log-container' && kind==='deployments'?'<option value="*">All containers</option>':'')+containers.map(c => `<option value="${escape(c.name)}">${escape(c.name)}</option>`).join('');
   document.querySelector('[data-tab="metrics"]').classList.toggle('hidden',!window.elD90WorkloadHistory.resources.includes(kind));
@@ -178,20 +218,22 @@ async function openDetail(object, kind, restoring = false) {
   document.querySelector('[data-tab="events"]').disabled=!object.metadata.uid||kind==='helm';
   document.querySelector('[data-tab="yaml"]').disabled = false;document.querySelector('[data-tab="node-access"]').classList.toggle('hidden',kind!=='nodes');
   $('apply-yaml').disabled = $('validate-yaml').disabled = kind === 'helm'; $('yaml-editor').readOnly = kind === 'helm'; $('forward-result').textContent = ''; $('forward-remote').value = String(object.spec?.ports?.[0]?.port || object.spec?.containers?.[0]?.ports?.[0]?.containerPort || 80);
+  for(const [name,applicable]of Object.entries({logs:['pods','deployments'].includes(kind),terminal:['pods','nodes'].includes(kind),forward:['pods','services'].includes(kind),events:!!object.metadata.uid&&kind!=='helm'}))document.querySelector('[data-tab="'+name+'"]').classList.toggle('hidden',!applicable);
   $('open-terminal-session').classList.toggle('hidden',kind!=='pods');
   $('logs-scope').textContent=kind==='deployments'?'All replica pods · pod/container prefixes · new replicas followed · initial 300 lines per pod':'Pod container logs · initial 300 lines';
   if(object.kind==='Event'){const ev=window.elD90Events.normalize(object);$('detail-summary').innerHTML='<dl>'+Object.entries(ev).map(([k,v])=>`<dt>${escape(k)}</dt><dd class="event-message">${escape(v)}</dd>`).join('')+'</dl>';}
   addResourceActions(object, kind); if(kind!=='helm')addManagementActions(object,kind);if(kind==='nodes'){const owner=state,epoch=state.detailGeneration;window.elD90Nodes.render($('detail-node-access'),{node:object,context:owner.context,namespace:owner.namespaces.length===1?owner.namespaces[0]:'',demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.detailGeneration===epoch,onSession:result=>acceptNodeSession(owner,object,result,epoch)});}
-  const dismissed=dismissedDrafts.get(draftKey());if(dismissed)state.originalYaml=dismissed.original;$('yaml-editor').value = restoring ? state.yamlDraft || '' : dismissed?.yaml??''; $('yaml-result').textContent = ''; detailLogViewer?.reset(restoring?state.logText||'':''); hidden('drawer', false); await tab(restoring ? state.savedTab || 'summary' : 'summary', restoring);workspaceUI?.detail(object,kind).catch(error);
+  const dismissed=dismissedDrafts.get(draftKey());if(dismissed)state.originalYaml=dismissed.original;$('yaml-editor').value = restoring ? state.yamlDraft || '' : dismissed?.yaml??''; $('yaml-result').textContent = ''; detailLogViewer?.reset(restoring?state.logText||'':''); hidden('drawer', false); await tab(restoring ? state.savedTab || 'summary' : 'summary', restoring);workspaceUI?.detail(object,kind).catch(error);paintExtensionDetails(object,kind);attachResourceData(object,kind);richEditor?.sync();resourceForms?.sync();
 }
 function detailInput() { const r = state.selected; if (!r) throw new Error('No resource selected'); return { context: state.context, namespace: r.metadata.namespace || state.namespace, resource: state.selectedKind, name: r.metadata.name }; }
-async function tab(value, restoring = false) {if(state.tab==='metrics'&&value!=='metrics')window.elD90History.stop($('detail-metrics'));
+async function tab(value, restoring = false) {if(value!=='summary')window.elD90SecretValues.clear();if(state.tab==='metrics'&&value!=='metrics')window.elD90History.stop($('detail-metrics'));
   state.tab = value; document.querySelectorAll('.detail-tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === value));
   for (const t of ['summary', 'yaml', 'logs', 'terminal', 'forward','node-access','events','metrics']) hidden(`detail-${t}`, value !== t);
   if (value === 'yaml' && !$('yaml-editor').value) {
     const generation = state.detailGeneration;
     try { const text = state.demo ? window.demoWorkspace.yaml(state.selected) : await invoke(state.selectedKind === 'helm' ? 'helm:manifest' : 'kube:yaml', detailInput()); if (generation === state.detailGeneration){$('yaml-editor').value = text;state.originalYaml=text;} } catch (e) { error(e); }
   }
+  richEditor?.sync();resourceForms?.sync();
   if(value==='summary')syncSelectedResource(state,state.selectedKind,state.items);
   if(value==='metrics'){const owner=state,epoch=owner.detailGeneration,object=owner.selected;await window.elD90History.render($('detail-metrics'),{context:owner.context,namespace:object.metadata.namespace||'*',namespaces:object.metadata.namespace?[object.metadata.namespace]:[],target:{resource:owner.selectedKind,namespace:object.metadata.namespace,name:object.metadata.name,uid:owner.selectedKind==='pods'?object.metadata.uid:undefined},containers:window.elD90WorkloadHistory.containers(object).map(c=>c.name),demo:owner.demo,invoke,autoSelectSingle:true,settings:owner.historySettings,onSettings:value=>{owner.historySettings=value;saveWorkspacePreferences();},isCurrent:()=>state===owner&&owner.detailGeneration===epoch&&owner.tab==='metrics'});}
   if(value==='events')await loadResourceEvents();
@@ -240,12 +282,12 @@ async function createResource(restoring = false) {
   document.querySelector('[data-tab="logs"]').disabled = true; document.querySelector('[data-tab="terminal"]').disabled = true;document.querySelector('[data-tab="node-access"]').classList.add('hidden');
   document.querySelector('[data-tab="events"]').disabled=true;
   $('detail-summary').textContent = 'Create any Kubernetes resource from YAML. Validate first, then apply.';hidden('create-controls',false);setupCreateControls(restoring);
-  $('yaml-editor').value = restoring ? state.yamlDraft || '' : `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: example-config\n  namespace: ${$('create-namespace').value || 'default'}\ndata:\n  greeting: hello\n`; $('yaml-result').textContent = ''; state.originalYaml='';editorTools?.clear();const dismissed=dismissedDrafts.get(draftKey());if(!restoring&&dismissed){$('yaml-editor').value=dismissed.yaml;state.originalYaml=dismissed.original;}hidden('drawer', false); await tab('yaml');workspaceUI?.applyReadOnly();
+  $('yaml-editor').value = restoring ? state.yamlDraft || '' : `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: example-config\n  namespace: ${$('create-namespace').value || 'default'}\ndata:\n  greeting: hello\n`; $('yaml-result').textContent = ''; state.originalYaml='';editorTools?.clear();const dismissed=dismissedDrafts.get(draftKey());if(!restoring&&dismissed){$('yaml-editor').value=dismissed.yaml;state.originalYaml=dismissed.original;}hidden('drawer', false); await tab('yaml');workspaceUI?.applyReadOnly();richEditor?.sync();resourceForms?.sync();
 }
 async function toggleDemo() {
   if(state.forcedDemo)return notice('This preview was launched in demo mode. Open el-d90 normally to use real contexts.',true);
   storeWorkspaceUI();if(state.context)clusterWorkspaces.set(workspaceKey(state.context),state);const demo=!state.demo;state=freshWorkspace('',demo);state.generation=++requestEpoch;paintWorkspace();
-  $('mode-badge').textContent=demo?'DEMO':'LOCAL';$('workspace-mode').textContent=demo?'Sample workspace':'kubectl workspace';$('demo-toggle').textContent=demo?'Return to my contexts ↗':'Explore demo workspace ↗';
+  $('mode-badge').textContent=demo?'DEMO':'LOCAL';$('workspace-mode').textContent=demo?'Sample workspace':'Kubernetes workspace';$('demo-toggle').textContent=demo?'Return to my contexts ↗':'Explore demo workspace ↗';
   hidden('overview',true);hidden('resource-view',true);hidden('special-view',true);hidden('welcome',false);await loadContexts();renderClusterTabs();
 }
 $('resource-type').onchange = () => { state.dynamicResource = $('resource-type').value; updateResourceInfo(); refresh(); };
@@ -273,7 +315,7 @@ window.eld90?.onStream(message => {
   if(message.id===owner.terminal){owner.terminalBuffer=((owner.terminalBuffer||'')+message.data).slice(-1000000);owner.terminalInstance?.write(message.data);if(message.ended)owner.terminal=null;}
 });
 
-(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version; if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
+(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version; if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadExtensions();await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
 
 function activeResource() { return state.view === 'resources' ? state.dynamicResource : state.view; }
 async function discoverResources(context) {
@@ -295,10 +337,10 @@ function renderDiscovery(){
  const groups=new Map();for(const r of [...state.catalogue].sort((a,b)=>(a.group||'').localeCompare(b.group||'')||a.kind.localeCompare(b.kind))){const key=r.group||(r.apiVersion?.includes('/')?r.apiVersion.split('/')[0]:'core');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);}
  $('resource-type').innerHTML=[...groups].map(([group,rows])=>`<optgroup label="${escape(group)}">${rows.map(r=>`<option value="${escape(r.key)}">${escape(r.title||r.kind)} · ${escape(r.apiVersion)}</option>`).join('')}</optgroup>`).join('');
  const builtins=new Set(['core','apps','batch','autoscaling','policy','networking.k8s.io','rbac.authorization.k8s.io','storage.k8s.io','coordination.k8s.io','discovery.k8s.io','events.k8s.io','node.k8s.io','scheduling.k8s.io','authentication.k8s.io','authorization.k8s.io','certificates.k8s.io','admissionregistration.k8s.io','apiextensions.k8s.io','flowcontrol.apiserver.k8s.io']);
- $('custom-resource-groups').innerHTML=groups.size?'<div class="nav-group">CUSTOM API GROUPS</div><input id="custom-resource-search" type="search" aria-label="Find custom resource type" placeholder="Find custom resource…">'+[...groups].filter(([group])=>!builtins.has(group)).map(([group,rows])=>`<details class="custom-api-group" data-group="custom:${escape(group)}"><summary>${escape(group)} <small>${rows.length}</small></summary>${rows.map(r=>`<button class="custom-api-resource" data-resource-key="${escape(r.key)}" title="${escape(r.apiVersion)}">${escape(r.kind)}<small>${r.namespaced?'Namespace':'Cluster'}</small></button>`).join('')}</details>`).join(''):'';
+ $('custom-resource-groups').innerHTML=groups.size?'<details id="custom-api-section" class="sidebar-group" data-group="CUSTOM API GROUPS"><summary>Custom API Groups</summary><input id="custom-resource-search" type="search" aria-label="Find custom resource type" placeholder="Find custom resource…">'+[...groups].filter(([group])=>!builtins.has(group)).map(([group,rows])=>`<details class="custom-api-group" data-group="custom:${escape(group)}"><summary>${escape(group)} <small>${rows.length}</small></summary>${rows.map(r=>`<button class="custom-api-resource" data-resource-key="${escape(r.key)}" title="${escape(r.apiVersion)}">${escape(r.kind)}<small>${r.namespaced?'Namespace':'Cluster'}</small></button>`).join('')}</details>`).join('')+'</details>':'';
  $('custom-resource-groups').querySelectorAll('[data-resource-key]').forEach(b=>b.onclick=()=>{state.dynamicResource=b.dataset.resourceKey;$('resource-type').value=state.dynamicResource;updateResourceInfo();navigate('resources');});
  window.elD90Sidebar?.restore();
- if($('custom-resource-search'))$('custom-resource-search').oninput=()=>{const query=$('custom-resource-search').value.toLowerCase();$('custom-resource-groups').querySelectorAll('details').forEach(group=>{let count=0;group.querySelectorAll('button').forEach(b=>{b.hidden=!`${group.querySelector('summary').textContent} ${b.textContent}`.toLowerCase().includes(query);if(!b.hidden)count++;});group.hidden=!count;if(query)group.open=!!count;});};
+ if($('custom-resource-search'))$('custom-resource-search').oninput=()=>{const query=$('custom-resource-search').value.toLowerCase();$('custom-resource-groups').querySelectorAll('.custom-api-group').forEach(group=>{let count=0;group.querySelectorAll('button').forEach(b=>{b.hidden=!`${group.querySelector('summary').textContent} ${b.textContent}`.toLowerCase().includes(query);if(!b.hidden)count++;});group.hidden=!count;if(query)group.open=!!count;});};
 }
 function updateResourceInfo() {
   const r = state.catalogue.find(r => r.key === state.dynamicResource);
@@ -320,9 +362,10 @@ function metricTable(items, pods) {
 async function renderSpecial(generation) {
   const view = state.view;
   $('special-content').innerHTML = '<div class="empty">Loading…</div>';
-  if(WORKSPACE_VIEWS.includes(view)){const owner=state;await workspaceUI.render($('special-content'),view,()=>state===owner&&state.generation===generation);}
+  if(FEATURE_VIEWS.includes(view)){const owner=state;await renderFeature(view,owner,()=>state===owner&&state.generation===generation);}
+  else if(WORKSPACE_VIEWS.includes(view)){const owner=state;await workspaceUI.render($('special-content'),view,()=>state===owner&&state.generation===generation);}
   else if(view==='cluster'){$('special-content').innerHTML='<div id="cluster-dashboard"></div>';const dashboardOwner=state;await window.elD90ClusterDashboard.render($('cluster-dashboard'),{context:dashboardOwner.context,demo:dashboardOwner.demo,invoke,role:dashboardOwner.clusterRole||'all',settings:dashboardOwner.historySettings,onRole:value=>{dashboardOwner.clusterRole=value;saveWorkspacePreferences();},onSettings:value=>{dashboardOwner.historySettings=value;saveWorkspacePreferences();},isCurrent:()=>state===dashboardOwner&&state.generation===generation});if(generation!==state.generation)return;}
-  else if(view==='applications'||view==='map'){const owner=state;await window.elD90Topology.render($('special-content'),{context:owner.context,namespace:owner.namespace,namespaces:[...owner.namespaces],demo:owner.demo,mapOnly:view==='map',invoke,isCurrent:()=>state===owner&&state.generation===generation,onOpenResource:ref=>openRelatedResource(owner,ref)});}
+  else if(view==='applications'||view==='map'){const owner=state;await window.elD90Topology.render($('special-content'),{context:owner.context,namespace:owner.namespace,namespaces:[...owner.namespaces],demo:owner.demo,mapOnly:view==='map',extraRelations:result=>window.elD90ExtensionModel.relations(extensionCache,result.nodes),invoke,isCurrent:()=>state===owner&&state.generation===generation,onOpenResource:ref=>openRelatedResource(owner,ref)});}
   else if(view==='node-sessions'){await renderNodeSessions(generation);}
   else if(API_VIEWS[view]){await renderApiFamily(view,generation);}
   else if (view === 'metrics') {
@@ -357,7 +400,15 @@ function addResourceActions(object, kind) {
   }
   if (object.kind === 'Secret') {
     const keys = object._dataKeys || object.dataKeys || [];
-    $('detail-summary').insertAdjacentHTML('beforeend', `<h3>Secret keys</h3><p>Values are excluded from resource lists. Open YAML to request the manifest with a native reveal confirmation.</p>${keys.map(key => `<span class="tag">${escape(key)}</span>`).join('') || '<p>No key metadata returned.</p>'}`);
+    $('detail-summary').insertAdjacentHTML('beforeend', `<h3>Secret keys</h3><p>Reveal values below to decode text data. Binary values are labelled and kept as base64. Values are hidden when you leave this panel.</p>${keys.map(key => `<span class="tag">${escape(key)}</span>`).join('') || '<p>No key metadata returned.</p>'}`);
+  }
+  if (object.kind === 'Secret') {
+    const owner=state,epoch=owner.detailGeneration,host=document.createElement('section');$('detail-summary').append(host);
+    window.elD90SecretValues.attach(host,{demo:owner.demo,invoke,onEdit:edit=>stageSecretKey(owner,object,edit,epoch),input:{context:owner.context,namespace:object.metadata.namespace,name:object.metadata.name,uid:object.metadata.uid},isCurrent:()=>state===owner&&owner.detailGeneration===epoch&&owner.tab==='summary'&&!$('drawer').classList.contains('hidden')});
+  }
+  if(object.kind==='VerticalPodAutoscaler'){
+    const recommendations=object.status?.recommendation?.containerRecommendations||[];
+    $('detail-summary').insertAdjacentHTML('beforeend','<h3>Vertical autoscaling</h3><dl><dt>Scale target</dt><dd>'+escape((object.spec?.targetRef?.kind||'')+'/'+(object.spec?.targetRef?.name||'—'))+'</dd><dt>Update mode</dt><dd>'+escape(object.spec?.updatePolicy?.updateMode||'Not specified')+'</dd></dl><h3>Container recommendations</h3>'+recommendations.map(c=>'<h4>'+escape(c.containerName)+'</h4><dl>'+['target','lowerBound','upperBound','uncappedTarget'].filter(key=>c[key]).map(key=>'<dt>'+escape(key)+'</dt><dd>'+escape(Object.entries(c[key]).map(([k,v])=>k+': '+v).join(', '))+'</dd>').join('')+'</dl>').join('')+(!recommendations.length?'<p>No recommendations reported by the VPA controller yet.</p>':''));
   }
   const conditionRows = (object.status?.conditions || []).map(c => `<tr><td>${escape(c.type)}</td><td>${escape(c.status)}</td><td>${escape(c.reason || '')}</td><td>${escape(c.message || '')}</td></tr>`).join('');
   if (conditionRows) $('detail-summary').insertAdjacentHTML('beforeend', `<h3>Conditions</h3><div class="panel table-panel"><table><thead><tr><th>Type</th><th>Status</th><th>Reason</th><th>Message</th></tr></thead><tbody>${conditionRows}</tbody></table></div>`);
@@ -388,6 +439,7 @@ function syncSelectedResource(owner,kind,items){
  if(!fresh)return;owner.selected=structuredClone(fresh);
  if(state!==owner)return;
  const status=$('detail-summary').querySelector('[data-summary-field="status"]');if(status)status.textContent=health(fresh).label;
+ if($('resource-summary-core'))paintResourceSummary(fresh,kind);window.elD90ResourceData.update?.(fresh);
  const replicas=$('scale-replicas');if(replicas&&!owner.workloadPending&&document.activeElement!==replicas)replicas.value=String(fresh.spec?.replicas??1);
 }
 
@@ -418,7 +470,7 @@ function storeWorkspaceUI(owner=state) {
 }
 function saveWorkspacePreferences() {
   if(state.demo)return;
-  try {localStorage.setItem('el-d90-workspaces-v1',JSON.stringify({active:state.context,workspaces:[...clusterWorkspaces.values()].filter(w=>!w.demo).map(w=>({context:w.context,namespaces:w.namespaces,view:w.view,historySettings:w.historySettings,search:w.search||'',statusFilter:w.statusFilter||'',labelFilter:w.labelFilter||'',clusterRole:w.clusterRole,autoRefresh:w.autoRefresh || false}))}));}catch{}
+  try {localStorage.setItem('el-d90-workspaces-v1',JSON.stringify({active:state.context,workspaces:[...clusterWorkspaces.values()].filter(w=>!w.demo).map(w=>({context:w.context,namespaces:w.namespaces,view:w.view,historySettings:w.historySettings,search:w.search||'',statusFilter:w.statusFilter||'',labelFilter:w.labelFilter||'',extensionPage:w.extensionPage,clusterRole:w.clusterRole,autoRefresh:w.autoRefresh || false}))}));}catch{}
 }
 function renderClusterTabs() {
   const host=$('cluster-tabs');if(!host)return;
@@ -434,7 +486,7 @@ function renderNamespaceOptions() {
   $('namespace-selection').querySelectorAll('[data-remove-namespace]').forEach(b=>b.onclick=()=>setNamespaceSelection(state.namespaces.filter(ns=>ns!==b.dataset.removeNamespace)).catch(error));
   if($('namespace-clear'))$('namespace-clear').onclick=()=>setNamespaceSelection([]).catch(error);
 }
-function paintWorkspace() {
+function paintWorkspace() {window.elD90SecretValues.clear();window.elD90ResourceData.clear();
   $('special-content').innerHTML='';$('detail-summary').innerHTML='';$('yaml-editor').value='';$('logs-output').textContent='';
   sessionUI?.setContext();$('context').value=state.context;$('breadcrumb-context').textContent=state.context || 'No cluster selected';renderClusterTabs();renderNamespaceOptions();
   $('page-title').innerHTML=`${escape(titles[state.view]||state.view)}<span class="heading-dot">.</span>`;
@@ -449,6 +501,7 @@ function paintWorkspace() {
   document.querySelector('main').scrollTop=state.scroll || 0;
 }
 async function selectContext(context) {
+  ++workspaceIntent;
   if(state.context===context && state.initialized)return;
   if(state.context!==context){workspaceUI?.cancel();window.elD90History.stopContext(state.context);if(state.readRequestId&&state.context)invoke('read:cancel',{context:state.context,requestId:state.readRequestId}).catch(()=>{});}
   storeWorkspaceUI();if(state.context)clusterWorkspaces.set(workspaceKey(state.context),state);
@@ -503,7 +556,7 @@ async function restoreWorkspacePreferences() {
     owner.namespace=owner.namespaces.length===1?owner.namespaces[0]:'*';owner.namespaceNames=[...owner.namespaces];
     if(['all','worker','control-plane'].includes(pref.clusterRole))owner.clusterRole=pref.clusterRole;
     if(pref.historySettings&&typeof pref.historySettings==='object')owner.historySettings=pref.historySettings;
-    if(Object.hasOwn(titles,pref.view))owner.view=pref.view;owner.search=typeof pref.search==='string'?pref.search.slice(0,500):'';owner.statusFilter=typeof pref.statusFilter==='string'?pref.statusFilter:'';owner.labelFilter=typeof pref.labelFilter==='string'?pref.labelFilter.slice(0,500):'';owner.autoRefresh=Boolean(pref.autoRefresh);owner.connectionLabel='Ready';
+    if(Object.hasOwn(titles,pref.view))owner.view=pref.view;if(pref.extensionPage&&typeof pref.extensionPage.id==='string'&&typeof pref.extensionPage.extensionId==='string')owner.extensionPage=pref.extensionPage;owner.search=typeof pref.search==='string'?pref.search.slice(0,500):'';owner.statusFilter=typeof pref.statusFilter==='string'?pref.statusFilter:'';owner.labelFilter=typeof pref.labelFilter==='string'?pref.labelFilter.slice(0,500):'';owner.autoRefresh=Boolean(pref.autoRefresh);owner.connectionLabel='Ready';
     clusterWorkspaces.set(workspaceKey(pref.context,false),owner);
   }
   const active=valid.find(pref=>pref.context===prefs.active)||valid[0];if(active)await selectContext(active.context);
@@ -540,9 +593,12 @@ function restoreHelmDrafts(owner) {
 }
 
 const editorTools=window.elD90Productivity.attachEditor({editor:$('yaml-editor'),toolbar:document.querySelector('#detail-yaml .editor-toolbar'),invoke,context:()=>state.context,resource:()=>state.selectedKind,original:()=>state.originalYaml || '',demo:()=>state.demo});
+function editorState(){return{context:state.context,resource:state.selectedKind,name:state.selected?.metadata.name,namespace:state.selected?.metadata.namespace,isCreating:state.isCreating,key:JSON.stringify([state.demo,state.context,state.selectedKind,state.selected?.metadata.namespace,state.selected?.metadata.uid||state.selected?.metadata.name,state.isCreating]),original:state.originalYaml||'',demo:state.demo};}
+richEditor=window.elD90RichEditor.create({textarea:$('yaml-editor'),invoke,getState:editorState,monacoPath:'../assets/monaco/vs'});
+resourceForms=window.elD90ResourceForms.attach({textarea:$('yaml-editor'),invoke,getState:editorState});
 async function openRelatedResource(owner,reference){
-  if(state!==owner)return;
-  try{const rows=owner.demo?window.demoWorkspace.list(reference.resource,'*').items:(await invoke('kube:list',{context:owner.context,namespace:reference.namespace || '*',resource:reference.resource})).items;if(state!==owner)return;let object=rows.find(r=>r.metadata.name===reference.name&&(!reference.namespace||r.metadata.namespace===reference.namespace));if(!object&&owner.demo)object={apiVersion:'v1',kind:reference.resourceKind || reference.resource,metadata:{name:reference.name,namespace:reference.namespace,labels:{demo:'generated'}},spec:{},status:{}};if(!object)throw new Error('The related resource no longer exists or is not visible to this context.');await openDetail(object,reference.resource);}catch(e){if(state===owner)error(e);}
+  if(state!==owner||reference.context&&reference.context!==owner.context)return;const expectedGeneration=owner.generation;
+  try{const rows=owner.demo?window.demoWorkspace.list(reference.resource,'*').items:(await invoke('kube:list',{context:owner.context,namespace:reference.namespace || '*',resource:reference.resource})).items;if(state!==owner||owner.generation!==expectedGeneration)return;let object=rows.find(r=>r.metadata.name===reference.name&&(!reference.namespace||r.metadata.namespace===reference.namespace)&&(!reference.uid||r.metadata.uid===reference.uid));if(!object&&owner.demo)object={apiVersion:'v1',kind:reference.resourceKind || reference.resource,metadata:{name:reference.name,namespace:reference.namespace,labels:{demo:'generated'}},spec:{},status:{}};if(!object)throw new Error('The related resource no longer exists or is not visible to this context.');await openDetail(object,reference.resource);}catch(e){if(state===owner)error(e);}
 }
 async function renderApiFamily(view,generation){
   const owner=state,definition=API_VIEWS[view],available=definition.resources.filter(key=>owner.catalogue.some(r=>r.key===key));
@@ -568,7 +624,7 @@ function initializeSidebarGroups(){
  let saved={};try{saved=JSON.parse(localStorage.getItem('el-d90-sidebar-groups-v1')||'{}')||{};}catch{}
  const persist=(key,open)=>{saved[key]=open;try{localStorage.setItem('el-d90-sidebar-groups-v1',JSON.stringify(saved));}catch{}};
  const headings=[...$('navigation').querySelectorAll(':scope > .nav-group')];
- for(const heading of headings){const key=heading.textContent.trim(),group=document.createElement('details'),summary=document.createElement('summary');group.className='sidebar-group';group.dataset.group=key;group.open=saved[key]!==false;summary.textContent=key;group.append(summary);heading.before(group);let next=heading.nextElementSibling;heading.remove();while(next&&!next.classList.contains('nav-group')){const following=next.nextElementSibling;group.append(next);next=following;}group.addEventListener('toggle',()=>persist(key,group.open));}
+ for(const heading of headings){const key=heading.textContent.trim(),group=document.createElement('details'),summary=document.createElement('summary');group.className='sidebar-group';group.dataset.group=key;group.open=key==='ADVANCED'?saved[key]===true:saved[key]!==false;summary.textContent=key;group.append(summary);heading.before(group);let next=heading.nextElementSibling;heading.remove();while(next&&!next.classList.contains('nav-group')){const following=next.nextElementSibling;group.append(next);next=following;}group.addEventListener('toggle',()=>persist(key,group.open));}
  const custom=$('custom-resource-groups');custom.addEventListener('toggle',event=>{const group=event.target;if(group.matches('details[data-group]'))persist(group.dataset.group,group.open);},true);
  window.elD90Sidebar={restore:()=>{let prefs={};try{prefs=JSON.parse(localStorage.getItem('el-d90-sidebar-groups-v1')||'{}')||{};}catch{}custom.querySelectorAll('details[data-group]').forEach(group=>group.open=prefs[group.dataset.group]===true);}};
 }
@@ -584,6 +640,7 @@ $('command-query').onkeydown=event=>{if(event.key==='Enter'){$('command-results'
 
 async function syncWorkspaceWatches(owner,force=false){
  const resources=owner.autoRefresh&&!owner.demo&&!SPECIAL_VIEWS.includes(owner.view)?owner.view==='overview'?['pods','deployments','nodes','events']:[owner.view==='resources'?owner.dynamicResource:owner.view]:[];
+ if(owner.view==='verticalpodautoscalers.autoscaling.k8s.io'&&!owner.catalogue.some(r=>r.key===owner.view))resources.length=0;
  const signature=JSON.stringify([owner.context,owner.namespaces,resources]);if(!force&&owner.watchSignature===signature)return;owner.watchSignature=signature;const ticket=(owner.watchEpoch||0)+1;owner.watchEpoch=ticket;
  const previous=owner.watchIds||[];owner.watchIds=[];owner.watchStates={};await Promise.all(previous.map(id=>invoke('watch:stop',{id}).catch(()=>{})));
  if(owner.watchEpoch!==ticket)return;
@@ -645,3 +702,13 @@ document.addEventListener('pointerdown',event=>{
  if(!$('drawer').classList.contains('hidden')&&!$('drawer').contains(event.target)&&!event.target.closest('#context,#reload-contexts,.cluster-tab'))closeDrawer().catch(error);
 });
 document.addEventListener('click',event=>{if(!backdropDown)return;const dialog=backdropDown;backdropDown=null;const r=dialog.getBoundingClientRect();if(event.target===dialog&&(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)){if(dialog.dispatchEvent(new Event('cancel',{cancelable:true})))dialog.close();}});
+
+// First-party feature navigation and declarative extension composition.
+function extensionColumns(resource){return window.elD90ExtensionModel.columns(extensionCache,resource);}
+async function loadExtensions(result){try{const data=result||await invoke('extensions:list');extensionCache=data.extensions||[];let host=$('extension-navigation');if(!host){host=document.createElement('section');host.id='extension-navigation';document.querySelector('.sidebar-group[data-group="ADVANCED"]').append(host);}host.innerHTML='';const pages=window.elD90ExtensionModel.contributions(extensionCache).pages;if(pages.length){const heading=document.createElement('div');heading.className='nav-group';heading.textContent='EXTENSION PAGES';host.append(heading);}for(const page of pages){const button=document.createElement('button');button.className='nav-item';button.textContent=page.title;button.dataset.extensionId=page.extensionId;button.dataset.extensionPage=page.id;button.onclick=()=>{state.extensionPage={extensionId:page.extensionId,id:page.id};navigate('extension-page').catch(error);};host.append(button);}return data;}catch(e){error(e);return{extensions:[]};}}
+function paintExtensionDetails(object,resource){$('extension-details')?.remove();const rows=window.elD90ExtensionModel.sections(extensionCache,resource,object);if(!rows.length)return;const host=document.createElement('section');host.id='extension-details';host.innerHTML=rows.map(section=>'<h3>'+escape(section.title)+'</h3><p>'+escape(section.extensionName)+'</p><dl>'+section.fields.map(f=>'<dt>'+escape(f.label||f.title)+'</dt><dd>'+escape(f.value)+'</dd>').join('')+'</dl>').join('');$('detail-summary').append(host);}
+async function openFeatureResource(target){++workspaceIntent;if(!target.context)target={...target,context:state.context};if(!state.contexts.some(c=>c.name===target.context))throw Error('This resource context is no longer configured');const pending=state.context!==target.context?selectContext(target.context):Promise.resolve(),owner=state,intent=workspaceIntent;await pending;if(state!==owner||state.context!==target.context||workspaceIntent!==intent)return;await openRelatedResource(owner,target);}
+async function configureCatalogChart(chart){const owner=state;if(!owner.context)throw Error('Choose a cluster before configuring an installation');const pending=navigate('helm'),intent=workspaceIntent,generation=await pending;if(state!==owner||owner.view!=='helm'||owner.generation!==generation||workspaceIntent!==intent||!$('helm-install-panel'))return;const ids={name:chart.name,namespace:chart.namespace,chart:chart.chart,version:chart.version,values:chart.values};$('helm-install-panel').open=true;for(const[key,value]of Object.entries(ids)){const field=$('helm-install-'+key);if(field){field.value=value;field.dispatchEvent(new Event('input',{bubbles:true}));}}$('helm-install-preview')?.focus();notice('Catalog chart loaded. Review the explicit cluster, release namespace and values, then Preview before confirming installation.',true);}
+async function renderFeature(view,owner,isCurrent){const host=$('special-content'),opts={invoke,demo:owner.demo,context:owner.context,namespaces:[...owner.namespaces],contexts:owner.contexts,isCurrent,onOpenResource:target=>openFeatureResource(target).catch(error)};if(view==='projects')return window.elD90Projects.render(host,opts);if(view==='catalog')return window.elD90Catalog.render(host,{...opts,onConfigureChart:chart=>configureCatalogChart(chart).catch(error)});if(view==='gitops')return window.elD90GitOps.render(host,{...opts,requestId:owner.readRequestId});if(view==='connections')return window.elD90Connections.render(host,{...opts,onEKSConnect:(context,namespace)=>openImportedEKS(context,namespace,owner),onConnect:(context,namespace)=>applySavedView({context,namespaces:[namespace],view:'overview',demo:owner.demo}).catch(error)});if(view==='extensions')return window.elD90Extensions.render(host,{...opts,onChanged:data=>loadExtensions(data)});if(view==='extension-page'){const page=window.elD90ExtensionModel.contributions(extensionCache).pages.find(p=>p.extensionId===owner.extensionPage?.extensionId&&p.id===owner.extensionPage?.id);if(!page){host.innerHTML='<p class="empty">This extension page is disabled or removed. Open Extensions to manage installed manifests.</p>';return;}return window.elD90Extensions.renderPage(host,{...opts,page});}}
+
+async function openImportedEKS(context,namespace,owner){if(!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(namespace))throw Error('Enter a valid Kubernetes namespace (up to 63 lowercase letters, digits or dashes).');const intent=++workspaceIntent;const result=owner.demo?window.demoWorkspace.contexts:await invoke('kube:contexts');if(state!==owner||intent!==workspaceIntent)return;for(const workspace of clusterWorkspaces.values())workspace.contexts=result.contexts;owner.contexts=result.contexts;$('context').innerHTML='<option value="">Choose a context…</option>'+result.contexts.map(c=>'<option value="'+escape(c.name)+'">'+escape(c.name)+'</option>').join('');$('context').value=owner.context;await applySavedView({context,namespaces:[namespace],view:'overview',demo:owner.demo});}
