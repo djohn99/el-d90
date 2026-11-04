@@ -2,7 +2,7 @@
 
 el-d90 extensions are **JSON manifests**, not executable JavaScript. They can add resource pages, detail sections, table columns and map relations. Headlamp or Lens plugins cannot be loaded. Extensions cannot define commands, IPC channels, network requests, HTML, scripts or mutations. Kubernetes reads still use the selected context, namespaces, API discovery and current identity.
 
-Open **Extensions → Install/update manifest…**, choose a reviewed JSON file, inspect its contribution summary in the native confirmation, then install it. Install the bundled **Workload ownership** example to try all four surfaces. Enabled state is local and persistent. Disable or remove an extension from the same page. To update it, import a manifest with the same `id` and a different semantic `version`; the existing enabled state is retained. A changed manifest cannot replace the same version silently.
+Open **File → Extensions → Install/update manifest…**, choose a reviewed JSON file, inspect its contribution summary in the native confirmation, then install it. Install the bundled **Workload ownership** example to try all four surfaces. Enabled state is local and persistent. Disable or remove an extension from the same page. To update it, import a manifest with the same `id` and a different semantic `version`; the existing enabled state is retained. A changed manifest cannot replace the same version silently.
 
 The complete example is [workload-ownership.extension.json](examples/workload-ownership.extension.json).
 
