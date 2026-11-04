@@ -1,3 +1,4 @@
+const {chooseContext,fileView}=require('./navigation-helpers.cjs');
 // Offline desktop integration: transport adapters are replaced with local shells.
 const {_electron}=require('playwright');
 const assert=require('node:assert/strict');
@@ -16,9 +17,21 @@ const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpd
   n.terminalArgs=()=>['exec','-it','fixture-pod','--context','fixture-a','--namespace','team','--','/bin/sh'];
  });
  await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'});
- await page.locator('#context').selectOption('fixture-a');await page.locator('#busy').waitFor({state:'hidden'});
+ await chooseContext(page,'fixture-a');await page.locator('#busy').waitFor({state:'hidden'});
  // Open a synthetic Node through the same renderer detail handler.
  await page.evaluate(()=>openDetail({kind:'Node',metadata:{name:'fixture-node'},spec:{},status:{conditions:[{type:'Ready',status:'True'}]}},'nodes'));
+ await page.locator('#node-pods').getByRole('button',{name:'fixture-pod',exact:true}).waitFor();
+ await page.locator('#node-pods').getByRole('button',{name:'fixture-pod',exact:true}).click();
+ await page.waitForFunction(()=>state.selectedKind==='pods'&&state.selected.metadata.namespace==='team');
+ await page.evaluate(()=>openDetail({kind:'Node',metadata:{name:'fixture-node'},spec:{},status:{}},'nodes'));
+ await page.locator('#node-pods input').fill('no-match');await page.locator('#node-pods').getByText('No matching pods.',{exact:true}).waitFor();
+ await page.locator('#node-pods input').fill('team');await page.locator('#node-pods').getByRole('button',{name:'fixture-pod',exact:true}).waitFor();
+ await app.evaluate(({ipcMain})=>{global.pendingNodePods=[];ipcMain.removeHandler('node:pods');ipcMain.handle('node:pods',(_e,input)=>input.nodeName==='empty-node'?{items:[]}:new Promise(resolve=>global.pendingNodePods.push(resolve)));});
+ await page.evaluate(()=>openDetail({kind:'Node',metadata:{name:'fixture-node'},spec:{},status:{}},'nodes'));await page.waitForFunction(()=>document.querySelector('#node-pods').textContent.includes('Loading pods'));
+ await page.evaluate(()=>openDetail({kind:'Node',metadata:{name:'empty-node'},spec:{},status:{}},'nodes'));await page.locator('#node-pods').getByText('No pods are assigned to this node.',{exact:true}).waitFor();
+ await app.evaluate(()=>global.pendingNodePods[0]({items:[{metadata:{name:'STALE_POD',namespace:'team'},spec:{nodeName:'fixture-node'}}]}));await page.waitForTimeout(80);assert.doesNotMatch(await page.locator('#node-pods').textContent(),/STALE_POD/);
+ await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('node:pods');ipcMain.handle('node:pods',()=>{throw Error('Forbidden: pods');});});
+ await page.locator('#node-pods').getByRole('button',{name:'Refresh pods'}).click();await page.locator('#node-pods').getByText(/Unable to load node pods:.*Forbidden/).waitFor();
  await page.locator('[data-tab="node-access"]').click();await page.locator('#node-discover').click();
  await page.waitForFunction(()=>document.querySelector('#node-ssh-host').value==='127.0.0.1');
  await page.locator('#node-ssh-user').fill('fixture');await page.locator('#node-ssh-connect').click();

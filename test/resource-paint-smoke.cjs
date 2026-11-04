@@ -1,3 +1,4 @@
+const {chooseContext,fileView}=require('./navigation-helpers.cjs');
 const {_electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'eld90-resource-paint-'));let app;
 (async()=>{try{
@@ -24,7 +25,7 @@ const root=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(
  const nav=async(view,context='fixture-a')=>{await page.evaluate(view=>{window.paintNavigation=navigate(view);},view);await ready(view,context);};
  const row=async(view,suffix='a')=>page.locator((view==='overview'?'#overview-table':'#resource-table')+' [aria-label="Open '+({pods:'pod',nodes:'node',deployments:'deployment',overview:'pod'}[view])+'-'+suffix+'"]').waitFor();
  // Initial Overview must become usable although its metrics Promise has no result.
- await page.locator('#context').selectOption('fixture-a');await ready('overview');await row('overview');assert.ok((await pending()).some(r=>r.channel==='pods:table-data'));
+ await chooseContext(page,'fixture-a');await ready('overview');await row('overview');assert.ok((await pending()).some(r=>r.channel==='pods:table-data'));
  for(const entry of await pending())await release(entry.id,'startup-'+entry.id);
  for(const[view,channel]of [['pods','pods:table-data'],['nodes','nodes:table-data'],['deployments','deployments:metrics'],['overview','pods:table-data']]){
   await nav('configmaps');const prior=new Set((await pending()).map(r=>r.id));await nav(view);await row(view);
@@ -41,7 +42,7 @@ const root=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(
  assert.equal(await page.evaluate(()=>state.podTableData.metrics['team/pod-a'].containers[0].cpu),'222m');assert.ok(!await page.locator('#notice').textContent().then(text=>text.includes('stale-generation')));
  // A response from cluster A must not repaint or mutate the visible cluster B view.
  await nav('nodes');const clusterA=(await pending()).find(r=>r.channel==='nodes:table-data'&&r.context==='fixture-a');assert.ok(clusterA);
- await page.locator('#context').selectOption('fixture-b');await ready('overview','fixture-b');await nav('nodes','fixture-b');await row('nodes','b');const clusterB=(await pending()).find(r=>r.channel==='nodes:table-data'&&r.context==='fixture-b');assert.ok(clusterB);
+ await chooseContext(page,'fixture-b');await ready('overview','fixture-b');await nav('nodes','fixture-b');await row('nodes','b');const clusterB=(await pending()).find(r=>r.channel==='nodes:table-data'&&r.context==='fixture-b');assert.ok(clusterB);
  await release(clusterB.id,'cluster-b-current','333m');await page.waitForFunction(()=>state.nodeTableData?.metrics?.['node-b']?.cpu==='333m');await release(clusterA.id,'cluster-a-late','999m');
  assert.equal(await page.evaluate(()=>state.context),'fixture-b');assert.equal(await page.evaluate(()=>state.nodeTableData.metrics['node-b'].cpu),'333m');assert.match(await page.locator('#resource-table').textContent(),/node-b/);assert.ok(!await page.locator('#notice').textContent().then(text=>text.includes('cluster-a-late')));
  assert.deepEqual(errors,[]);console.log('PASS: Pods/Nodes/Deployments/Overview rows and navigation complete before unresolved optional metrics; late generation/context results cannot replace newer data or warnings');
