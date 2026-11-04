@@ -1,3 +1,4 @@
+const {chooseContext,fileView}=require('./navigation-helpers.cjs');
 const { _electron } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -13,7 +14,7 @@ async function launch(demo = false, failure = '') {
   const page = await application.firstWindow(); await page.setViewportSize({width:1460,height:940}); page.on('pageerror', e => errors.push(e.message)); return page;
 }
 async function chooseNamespaces(page,names) {
- await page.locator('#namespace-multi').click();const options=page.locator('#namespace-options input');for(let i=0;i<await options.count();i++)await options.nth(i).setChecked(names.includes(await options.nth(i).getAttribute('value')));await page.locator('#namespace-done').click();
+ await page.locator('#namespace-multi').click();const options=page.locator('#namespace-options input');for(let i=0;i<await options.count();i++)await options.nth(i).setChecked(names.includes(await options.nth(i).getAttribute('value')));await page.locator('#namespace-multi').click();
 }
 async function expectText(page, selector, text) { await page.locator(selector).filter({ hasText: text }).waitFor(); }
 async function waitFor(fn, timeout = 4000) { const end = Date.now() + timeout; while (!fn()) { if (Date.now() > end) throw new Error('Condition timed out'); await new Promise(r => setTimeout(r, 40)); } }
@@ -48,9 +49,9 @@ function alive(pid) { try { process.kill(pid, 0); return true; } catch { return 
     console.log('PASS: demo, namespace filter, search, details, YAML, logs and terminal isolation');
 
     page = await launch();
-    await page.getByRole('combobox', { name: 'Cluster context', exact: true }).locator('option[value="fixture-a"]').waitFor({ state: 'attached' });
+    await page.locator('#context option[value="fixture-a"]').waitFor({ state: 'attached' });
     assert.ok(calls().every(c => c.args[0] === 'config'), 'Launch must not contact a cluster');
-    await page.getByRole('combobox', { name: 'Cluster context', exact: true }).selectOption('fixture-a');
+    await chooseContext(page,'fixture-a');
     await page.getByRole('button', { name: 'View all pods ↗', exact: true }).click();
     await page.getByRole('button', { name: 'Open fixture-pod', exact: true }).click();
     await page.getByRole('button', { name: 'YAML', exact: true }).click();
@@ -76,7 +77,7 @@ function alive(pid) { try { process.kill(pid, 0); return true; } catch { return 
     const terminalPid = calls().find(c => c.args.includes('exec')).pid;
     await page.getByRole('button', { name: 'Close details' }).click();
     await waitFor(() => !alive(logPid) && !alive(terminalPid));
-    await page.locator('.sidebar-group[data-group="ADVANCED"] > summary').click();await page.locator('.nav-item[data-view="resources"]').click();
+    await fileView(application,'resources');
     await page.locator('#resource-type').selectOption('widgets.example.test');
     await page.getByRole('button', { name: 'Open fixture-widget', exact: true }).waitFor();
     await page.locator('.nav-item[data-view="metrics"]').click();
@@ -116,7 +117,7 @@ function alive(pid) { try { process.kill(pid, 0); return true; } catch { return 
     await expectText(page, '#special-content', 'fixture-pod');
     await page.locator('.stop-forward').click(); await expectText(page, '#special-content', 'stopped');
     console.log('PASS: dynamic API/CRD browsing, metrics, Helm 4 manifests, secret reveal cancellation, workload confirmation and port-forward lifecycle');
-    await page.getByRole('combobox', { name: 'Cluster context', exact: true }).selectOption('fixture-b');
+    await chooseContext(page,'fixture-b');
     await expectText(page, '#connection', 'Connected');
     assert.ok(calls().filter(c => !['config','helm'].includes(c.args[0])).every(c => c.args.includes('--context')));
     assert.ok(calls().some(c => c.args.includes('fixture-b')));
@@ -124,13 +125,13 @@ function alive(pid) { try { process.kill(pid, 0); return true; } catch { return 
     console.log('PASS: startup isolation, context switching, live fixture resources, validation, cancel/apply, logs, interactive PTY input and process cleanup');
     await application.close(); application = null;
     page = await launch(false, 'pods');
-    await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'}); await page.locator('#context').selectOption('fixture-a');
+    await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'}); await chooseContext(page,'fixture-a');
     await expectText(page, '#health-badge', 'Unavailable'); await expectText(page, '#connection', 'partial');
     assert.ok((await page.locator('#metrics').textContent()).includes('Unavailable'));
     await expectText(page, '#overview-table', 'Pods unavailable');
     await application.close(); application = null;
     page = await launch(false, 'namespaces');
-    await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'}); await page.locator('#context').selectOption('fixture-a');
+    await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'}); await chooseContext(page,'fixture-a');
     await page.locator('#namespace-warning').waitFor({state:'visible'});
     await page.locator('#namespace-input').fill('team'); await page.locator('#use-namespace').click();
     await page.getByRole('button',{name:'Open fixture-pod',exact:true}).waitFor();

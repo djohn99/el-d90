@@ -1,3 +1,4 @@
+const {chooseContext,fileView}=require('./navigation-helpers.cjs');
 // Reusable offline Electron acceptance checks for independent cluster workspaces.
 const { _electron } = require('playwright');
 const assert = require('node:assert/strict');
@@ -46,7 +47,7 @@ async function launch(demo = false) {
 }
 async function selectContext(page, name) {
   await page.locator(`#context option[value="${name}"]`).waitFor({ state: 'attached' });
-  await page.locator('#context').selectOption(name);
+  await chooseContext(page,name);
   await page.locator(`.cluster-tab-select[data-context="${name}"][aria-selected="true"]`).waitFor();
   await page.locator('#busy').waitFor({ state: 'hidden' });
 }
@@ -59,7 +60,7 @@ async function namespaces(page, names) {
   await page.locator('#namespace-multi').click();
   const inputs = page.locator('#namespace-options input');
   for (let i = 0; i < await inputs.count(); i++) await inputs.nth(i).setChecked(names.includes(await inputs.nth(i).getAttribute('value')));
-  await page.locator('#namespace-done').click();
+  await page.locator('#namespace-multi').click();
   await page.locator('#namespace-popover').waitFor({ state: 'hidden' });
   await page.locator('#busy').waitFor({ state: 'hidden' });
 }

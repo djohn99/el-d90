@@ -1,3 +1,4 @@
+const {chooseContext,fileView}=require('./navigation-helpers.cjs');
 const { _electron } = require('playwright'), assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const root = path.resolve(__dirname, '..'), temp = fs.mkdtempSync(path.join(os.tmpdir(), 'eld90-secret-autoscale-')), mock = path.join(temp, 'kubectl'), record = path.join(temp, 'requests.jsonl'), noVpa = path.join(temp, 'no-vpa');
 const input = { apiVersion: 'v1', kind: 'Secret', type: 'Opaque', metadata: { name: 'synthetic-secret', namespace: 'team', uid: 'synthetic-uid' }, data: { unicode: Buffer.from('synthetic 🌍\nline two').toString('base64'), html: Buffer.from('<img src=x onerror="window.SECRET_XSS=true">').toString('base64'), empty: '', binary: 'AP8B' } };
@@ -13,7 +14,7 @@ let app;
 (async () => { try {
   app = await _electron.launch({ executablePath: process.env.EL_D90_APP_EXECUTABLE || require('electron'), args: process.env.EL_D90_APP_EXECUTABLE ? [] : [root], cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '', EL_D90_USER_DATA: path.join(temp, 'profile'), EL_D90_KUBECTL: mock, EL_D90_TEST_RECORD: record } });
   const page = await app.firstWindow(); page.setDefaultTimeout(20000); const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'});await page.locator('#context').selectOption('fixture-a');await page.waitForFunction(() => state.initialized && !state.loading);
+  await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'});await chooseContext(page,'fixture-a');await page.waitForFunction(() => state.initialized && !state.loading);
   async function nav(view) { const button = page.locator('[data-view="' + view + '"]'); const group = button.locator('..'); if (!await group.evaluate(e => e.open)) await group.locator(':scope > summary').click(); await button.click(); await page.waitForFunction(v => state.view === v && !state.loading, view); }
   await nav('secrets'); await page.getByRole('button', { name: 'Open synthetic-secret', exact: true }).click();
   assert.equal(await page.locator('#secret-values').textContent(), ''); assert.ok(!JSON.stringify(await page.evaluate(() => state.items)).includes(input.data.unicode));

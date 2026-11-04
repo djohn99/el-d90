@@ -192,6 +192,7 @@ handle('helm:repo-update',async()=>{const choice=await dialog.showMessageBox(win
 handle('kube:discover', kube.discover);
 handle('kube:metrics', kube.metrics);
 handle('nodes:table-data',nodeTable.extras);
+handle('node:pods',input=>require('./node-pods.cjs').list(input));
 handle('cluster:resources',clusterResources.snapshot);
 handle('deployments:metrics',workloadMetrics.snapshot);
 handle('resource:history',resourceHistory.query);
@@ -275,6 +276,7 @@ app.whenReady().then(async () => {
   try{const records=JSON.parse(await fs.readFile(journalPath(),'utf8'));nodes.restoreOwned(records);}catch(e){if(e.code!=='ENOENT')nodeCleanupErrors.set('journal','Debug recovery metadata could not be loaded: '+e.message);}
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'el-d90', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] },
+    require('./application-menu.cjs').fileMenu(view=>window?.webContents.send('app:navigate',view)),
     { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
   ]));
   return createWindow();
