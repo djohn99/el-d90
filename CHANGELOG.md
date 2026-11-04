@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.5] - 2026-11-04
+
+### Added
+
+- Search cluster contexts by name or cluster, with keyboard selection and click-away dismissal.
+- Node details list assigned Pods across namespaces with search, refresh and direct Pod inspection.
+
+### Changed
+
+- Move occasional tools into the macOS File menu, Services and Ingresses under Network, and HPA/VPA under More Workloads.
+- Hide Create resource on Nodes and Cluster, and remove the namespace picker's redundant Done button.
+- Connect opens the workspace automatically after success. AWS role selection prepares the profile and loads clusters automatically; selecting a saved profile loads its clusters too.
+
+### Fixed
+
+- Preserve drawer drafts while switching through the searchable context picker.
+- Ignore stale AWS account/role responses and clear previous connection choices when changing identity.
+
 ## [0.5.4] - 2026-10-31
 
 ### Added

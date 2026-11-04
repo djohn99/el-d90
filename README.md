@@ -8,9 +8,9 @@ An independent, local Kubernetes desktop workspace for macOS. Open multiple clus
 
 **[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
 
-[Direct DMG download for 0.5.4](https://github.com/djohn99/el-d90/releases/download/v0.5.4/el-d90-0.5.4-mac-arm64.dmg)
+[Direct DMG download for 0.5.5](https://github.com/djohn99/el-d90/releases/download/v0.5.5/el-d90-0.5.5-mac-arm64.dmg)
 
-Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.4) · [All releases](https://github.com/djohn99/el-d90/releases)
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.5) · [All releases](https://github.com/djohn99/el-d90/releases)
 
 1. Download the DMG using the link above.
 2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
@@ -35,10 +35,10 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
-To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.4/el-d90-0.5.4-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.5/el-d90-0.5.5-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
 
 ```sh
-shasum -a 256 -c el-d90-0.5.4-mac-arm64.dmg.sha256
+shasum -a 256 -c el-d90-0.5.5-mac-arm64.dmg.sha256
 ```
 
 ## Screenshots
@@ -53,9 +53,9 @@ Deployment inspection with combined replica logs:
 
 *Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
 
-## New in 0.5.4
+## New in 0.5.5
 
-**0.5.4** improves AWS connections on proxy-managed Macs, adds connection diagnostics and saved column widths, and brings resource filters closer to the table. See the [complete release notes](docs/releases/0.5.4.md). Occasional tools are grouped under **Advanced**, collapsed by default; its open/closed preference is remembered.
+**0.5.5** adds searchable cluster contexts, assigned Pods in node details and fewer clicks when connecting clusters. Occasional tools now live in the macOS **File** menu. See the [complete release notes](docs/releases/0.5.5.md).
 
 Earlier workspace additions remain available:
 
@@ -66,11 +66,11 @@ Earlier workspace additions remain available:
 - **Guided form:** read a single YAML document into common-resource fields or explicitly load an available resource schema. Update YAML locally while preserving fields outside the form; stale forms cannot overwrite newer YAML. Multi-document manifests remain supported through the YAML editor.
 - **GitOps:** read-only Argo CD Application/AppProject/ApplicationSet and Flux controller/source visibility, including sync/health, revisions, conditions, history and verified managed-resource links. Remote/ambiguous destinations never navigate to a same-named local object. Requires the relevant controllers/APIs and read permissions; the app does not install them automatically.
 - **Extensions:** install, update, enable/disable and remove reviewed declarative JSON manifests. SDK v1 adds read-only resource pages, metadata/status details, columns and namespace-scoped map relations. No arbitrary JavaScript, HTML, network calls or commands are permitted. Headlamp plugins are not compatible. See [extension authoring](docs/extensions.md).
-- **Connect clusters:** inspect provider/client metadata, preview and import kubeconfig *paths*, run an exact-context/namespace read-only test, then open that cluster. Configured OIDC exec plugins may open their own browser login; provider registration and legacy-to-exec conversion remain external. Tokens, certificates, exec arguments and environment values are not returned to the wizard or copied into app settings.
+- **Connect clusters:** inspect provider/client metadata, preview and import kubeconfig *paths*, connect with an exact-context/namespace read-only test and open the cluster automatically after success. Configured OIDC exec plugins may open their own browser login; provider registration and legacy-to-exec conversion remain external. Tokens, certificates, exec arguments and environment values are not returned to the wizard or copied into app settings.
 
 **Kubernetes read transport:** Resource lists, resource Events, raw API/metrics GETs and live watches use persistent, context-isolated Kubernetes API connections. Exec credentials are cached in memory until refresh is needed, with bounded plugin execution; kubeconfig CA, client certificates, TLS server names, configured proxies and impersonation settings are retained. Lists are paginated and Secret list data remains redacted. Permission failures are reported without switching identities. Terminals, logs, port forwarding, Helm, YAML apply/validation and other mutations retain their existing CLI paths. `EL_D90_KUBE_TRANSPORT=cli` is available as an explicit diagnostic compatibility override; test fixture binaries also use CLI mode unless API mode is explicitly requested. See the [read-transport measurements and validation](docs/performance-api-client.md).
 
-**AWS SSO / EKS:** Open **Advanced → Connect clusters → AWS SSO → EKS**. Select an AWS CLI profile and region, choose **Sign in with AWS SSO**, complete browser sign-in, then choose a cluster and **Add EKS connection → Open this cluster**. Cluster discovery loads automatically after successful sign-in. If listing is restricted, enter a known cluster name. AWS CLI v2 manages credential caching and `eks get-token`; el-d90 never asks for copied access tokens.
+**AWS SSO / EKS:** Open **File → Connect clusters → AWS SSO → EKS**. Sign in and discover your assigned accounts and roles, then choose an account and role. Selecting a role prepares its profile and loads EKS clusters automatically. Alternatively, select a saved AWS CLI profile and region and sign in if needed. Choose your cluster and click **Connect to cluster** to open its workspace automatically. If listing is restricted, enter a known cluster name. AWS CLI v2 manages credential caching and `eks get-token`; el-d90 never asks for copied access tokens.
 
 To discover your assignments, choose **Sign in & discover roles**. The app pre-fills a known SSO portal URL/region when available, or you can enter your organization’s AWS access portal `/start` URL and SSO region. Complete browser sign-in first; only then does AWS return your assigned accounts. Choose **AWS account → Assigned role → Use selected role**. A separate named AWS CLI profile is saved for that account/role and clusters load automatically. You can repeat the selection for another role without signing in again while the discovery session is valid. This flow does not change AWS or Kubernetes permissions. OAuth tokens remain in the background process and the private AWS CLI SSO cache, never in the renderer or kubeconfig.
 
@@ -95,7 +95,7 @@ AI remains disabled. These additions use el-d90 implementations and the upstream
 - Workloads, networking, storage, RBAC, Events and dynamically discovered APIs/custom resources.
 - Resource creation/import, YAML editing, local validation, server dry-run and confirmed apply.
 - Secret detail **Reveal decoded values** / **Hide values** controls, with native confirmation and panel-only display. UTF-8 data is decoded; binary data is labelled as base64.
-- Dedicated **Autoscaling** navigation for HPA and VPA, with VPA target, update policy and container recommendations when the API/controller is installed and accessible.
+- HPA and VPA under **More Workloads**, with VPA target, update policy and container recommendations when the API/controller is installed and accessible.
 - Deployment logs aggregated across replicas, Pod logs and interactive Pod shells.
 - General local cluster terminals with multiple terminal/log sessions per cluster. Drag the panel’s top edge to resize; close individual sessions or dismiss the panel.
 - Dedicated Cluster page with CPU, memory and Pod capacity rings, requests/limits, worker/control-plane filters and CPU/memory history across all namespaces. Overview retains workload health and recent activity for the selected namespaces.
@@ -247,7 +247,7 @@ Download official builds from [this repository’s Releases](https://github.com/
 
 ## Automated releases
 
-Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.4` for version `0.5.4`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.5` for version `0.5.5`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
 
 After committing your next changes:
 
