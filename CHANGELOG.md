@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.6] - 2026-11-05
+
+### Added
+
+- Page controls for large Pod, Node, workload, configuration and Events tables, with 50/100/250 rows per page.
+- Compact per-container status squares with hover details for readiness, waiting/error, completion and unavailable states.
+
+### Changed
+
+- Resource lists using the persistent API display received pages while remaining pages load, with a clear loaded/loading count.
+- Search, sorting and CSV exports cover the full loaded list. Filters reset the page; metrics and live updates retain the selected page when possible.
+
+### Fixed
+
+- Ignore stale progressive responses after context/request changes and preserve Secret list redaction in incremental updates.
+
 ## [0.5.5] - 2026-11-04
 
 ### Added

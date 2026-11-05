@@ -111,10 +111,11 @@ function listObject(item,kind){if(kind==='secrets'||kind.startsWith('secrets.'))
 async function pagedList(input,kind,request=run){
  const endpoint=listPath(input,kind),items=[],seen=new Set();let token='',limit=100,bytes=0,pages=0,resourceVersion;
  do{
-  const query=new URLSearchParams({limit:String(limit)});if(kind==='pods'&&input.nodeName)query.set('fieldSelector','spec.nodeName='+name(input.nodeName,'node name'));if(token)query.set('continue',token);let page;
+  const pageStart=items.length,query=new URLSearchParams({limit:String(limit)});if(kind==='pods'&&input.nodeName)query.set('fieldSelector','spec.nodeName='+name(input.nodeName,'node name'));if(token)query.set('continue',token);let page;
   try{page=JSON.parse(await request(['get','--raw',endpoint+'?'+query,'--context',string(input.context,'context'),'--request-timeout=20s']));}catch(e){if(/Response exceeds 24 MB/.test(e.message)&&limit>1){limit=Math.max(1,Math.floor(limit/5));continue;}throw e;}
   resourceVersion=page.metadata?.resourceVersion||resourceVersion;if(!Array.isArray(page.items))throw Error('Kubernetes returned an invalid resource page');
   for(const raw of page.items){const item={apiVersion:page.apiVersion||definition(kind,input.context)?.apiVersion||LIST_VERSIONS[kind]||'v1',kind:definition(kind,input.context)?.kind||(page.kind?.endsWith('List')?page.kind.slice(0,-4):undefined),...raw};const value=(kind==='secrets'||kind.startsWith('secrets.'))?item:listObject(item,kind);bytes+=Buffer.byteLength(JSON.stringify(value));if(bytes>128*1024*1024||items.length>=50000)throw Error('Resource list exceeds 128 MiB or 50,000 resources. Select namespaces to reduce the list.');items.push(value);}
+  if(input.onPage)input.onPage(items.slice(pageStart).map(item=>listObject(item,kind)));
   token=page.metadata?.continue||'';if(typeof token!=='string'||token.length>65536)throw Error('Invalid Kubernetes continuation token');if(token&&seen.has(token))throw Error('Kubernetes repeated a resource continuation token');seen.add(token);if(++pages>10000)throw Error('Resource pagination exceeded 10,000 pages. Select namespaces to reduce the list.');if(!token)break;
  }while(true);return{items,metadata:{resourceVersion}};
 }

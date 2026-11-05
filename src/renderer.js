@@ -48,7 +48,7 @@ async function invoke(channel, data) {
   return window.eld90.invoke(channel, data);
 }
 async function list(kind) {
-  const input = { context: state.context, namespace: state.namespace, namespaces: [...state.namespaces], resource: kind };
+  const input = { context: state.context, namespace: state.namespace, namespaces: [...state.namespaces], resource: kind, progress: state.view!=='overview'&&!SPECIAL_VIEWS.includes(state.view)&&kind===activeResource() };
   if (!state.demo) return invoke('kube:list', input);
   if (!input.namespaces.length) return window.demoWorkspace.list(kind, '*');
   const all = window.demoWorkspace.list(kind, '*'); return {items:all.items.filter(r=>!r.metadata.namespace || input.namespaces.includes(r.metadata.namespace))};
@@ -145,7 +145,7 @@ async function refresh() {
       if(owner.demo&&kind==='pods')await loadPodTableData(owner,result.items||[]);
       if(owner.demo&&kind==='nodes'){const metrics={};for(const node of result.items||[])metrics[node.metadata.name]={cpu:'750m',memory:'2Gi'};const podCounts={};for(const pod of window.demoWorkspace.list('pods','*').items)if(pod.spec?.nodeName&&!['Succeeded','Failed'].includes(pod.status?.phase))podCounts[pod.spec.nodeName]=(podCounts[pod.spec.nodeName]||0)+1;owner.nodeTableData={metrics,podCounts,podsAvailable:true,warnings:[]};}
       if(owner.demo&&kind==='deployments')for(const d of result.items||[])d._elD90Usage={cpu:(d.status?.readyReplicas||0)*.025,memory:(d.status?.readyReplicas||0)*32*1024**2,pods:d.status?.readyReplicas||0,cpuSamples:d.status?.readyReplicas||0,memorySamples:d.status?.readyReplicas||0};
-      owner.items=result.items||[];syncSelectedResource(owner,kind,owner.items);owner.listWarnings=result.warnings||[];filterTable();if(owner.listWarnings.length)notice(owner.listWarnings.join('\n'));else if(!owner.demo)notice();connection(owner.demo?'Demo · sample data':owner.namespaceError||owner.listWarnings.length?'Connected · partial data':'Connected',true);
+      owner.listPartial=false;owner.items=result.items||[];syncSelectedResource(owner,kind,owner.items);owner.listWarnings=result.warnings||[];filterTable();if(owner.listWarnings.length)notice(owner.listWarnings.join('\n'));else if(!owner.demo)notice();connection(owner.demo?'Demo · sample data':owner.namespaceError||owner.listWarnings.length?'Connected · partial data':'Connected',true);
       if(extraRequest)extraRequest.then(usage=>{
         if(state!==owner||owner.generation!==generation||activeResource()!==kind)return;
         if(kind==='deployments')owner.items=owner.items.map(r=>({...r,_elD90Usage:usage.deployments[r.metadata.namespace+'/'+r.metadata.name]||null}));
@@ -157,14 +157,14 @@ async function refresh() {
     if(generation!==state.generation)return;
     await syncWorkspaceWatches(state);if(generation!==state.generation)return;
     $('updated').textContent = `${state.demo ? 'Sample data · ' : ''}Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  } catch (e) { if (generation === state.generation) { error(e); connection('Request failed'); if (SPECIAL_VIEWS.includes(state.view)) $('special-content').innerHTML = '<div class="empty">This view is unavailable. See the request error above.</div>'; $('resource-table').innerHTML = '<div class="empty">Unable to load resources. Check the connection message above.</div>'; } }
+  } catch (e) { if (generation === state.generation) { state.items=[];state.listPartial=false;error(e); connection('Request failed'); if (SPECIAL_VIEWS.includes(state.view)) $('special-content').innerHTML = '<div class="empty">This view is unavailable. See the request error above.</div>'; $('resource-table').innerHTML = '<div class="empty">Unable to load resources. Check the connection message above.</div>'; } }
   finally { if (generation === state.generation) { state.loading = false; hidden('busy', true);workspaceUI?.onState(); } }
 }
 function filterTable() {
   state.search=$('search').value;state.statusFilter=$('status-filter').value;state.labelFilter=$('label-filter').value;
-  const query = $('search').value.trim().toLowerCase();
+  const query = $('search').value.trim().toLowerCase();const pageKey=JSON.stringify([state.context,activeResource(),query,state.statusFilter,state.labelFilter]),table=$('resource-table'),pager=window.elD90VirtualTable.states.get(table);if(table.dataset.pageFilter!==pageKey&&pager){pager.key=pageKey;pager.page=0;pager.column=null;}table.dataset.pageFilter=pageKey;
   const eventView=activeResource()==='events'||activeResource()?.startsWith('events.');const items = state.items.filter(r => (eventView?window.elD90Events.matches(r,query):window.elD90WorkspaceModel.filtered(r,{query,status:$('status-filter')?.value||'',labels:$('label-filter')?.value||''})));
-  $('resource-count').textContent = `${items.length} resource${items.length === 1 ? '' : 's'}`; renderTable('resource-table', items, activeResource());
+  $('resource-count').textContent = `${items.length} resource${items.length === 1 ? '' : 's'}${state.listPartial?' loaded · loading…':''}`; renderTable('resource-table', items, activeResource());
 }
 function updatePageHeading(){
  const cluster=state.view==='cluster',resource=activeResource(),compact=state.view!=='overview'&&!SPECIAL_VIEWS.includes(state.view),clusterScoped=cluster||['nodes','namespaces','persistentvolumes','storageclasses','clusterroles','clusterrolebindings','customresourcedefinitions'].includes(resource)||state.catalogue.find(item=>item.key===resource)?.namespaced===false;document.querySelector('.page-heading').classList.toggle('compact-resource-heading',compact);document.querySelector('.content').classList.toggle('compact-resource-content',compact);document.querySelector('.resource-filters').hidden=state.view==='events';
@@ -306,6 +306,8 @@ $('context-search').oninput=renderContextPicker;
 $('context-popover').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeContextPicker();$('context-trigger').focus();}else if(event.key==='ArrowDown'||event.key==='ArrowUp'){const choices=[...$('context-options').querySelectorAll('button')];if(!choices.length)return;event.preventDefault();const index=choices.indexOf(document.activeElement),next=event.key==='ArrowDown'?(index+1)%choices.length:index<0?choices.length-1:(index-1+choices.length)%choices.length;choices[next].focus();}else if(event.key==='Enter'&&event.target===$('context-search')){event.preventDefault();$('context-options').querySelector('button')?.click();}};
 document.addEventListener('click',event=>{if(!$('context-popover').classList.contains('hidden')&&!$('context-popover').contains(event.target)&&!$('context-trigger').contains(event.target))closeContextPicker();});
 $('context').onchange = () => selectContext($('context').value).catch(error);
+let listPaintFrame=0;
+window.eld90.onListPage(value=>{if(!state.loading||value.context!==state.context||value.requestId!==state.readRequestId||value.resource!==activeResource()||SPECIAL_VIEWS.includes(state.view)||state.view==='overview')return;if(state.listProgressId!==value.requestId){state.listProgressId=value.requestId;state.items=[];}state.listPartial=true;state.items.push(...value.items);if(!listPaintFrame)listPaintFrame=requestAnimationFrame(()=>{listPaintFrame=0;if(value.context===state.context&&value.requestId===state.readRequestId&&state.listPartial)filterTable();});});
 window.eld90.onNavigate(view=>{if(Object.hasOwn(titles,view))navigate(view).catch(error);});
 $('namespace').onchange = () => setNamespaceSelection($('namespace').value === '*' ? [] : [$('namespace').value]);
 $('navigation').onclick = e => { const b = e.target.closest('[data-view]'); if (b) navigate(b.dataset.view); };
@@ -684,10 +686,13 @@ function setupCreateControls(restoring){
 function renderEventsTable(target,items,max=Infinity){
  const rows=window.elD90Events.newest(items).slice(0,max),container=$(target);
  if(!rows.length){container.innerHTML='<div class="empty">No retained events match this view. Check the namespace selection and search. Kubernetes events expire; this is not an audit history.</div>';return;}
- const columns=['Type','Reason','Object','Namespace','Message','Count','Last seen'];
- container.innerHTML='<p class="events-help">Newest events first · select a row for full details · Kubernetes retains events for a limited time.</p><table class="events-table"><thead><tr>'+columns.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>'+rows.map((event,i)=>{const e=window.elD90Events.normalize(event);return `<tr role="button" tabindex="0" data-index="${i}" aria-label="Event ${escape(e.reason)} ${escape(e.object)}"><td><span class="pill ${e.type==='Warning'?'red':'green'}">${escape(e.type)}</span></td><td>${escape(e.reason)}</td><td>${escape(e.object)}</td><td>${escape(e.namespace)}</td><td class="event-message">${escape(e.message)}</td><td>${escape(e.count)}</td><td title="${escape(e.last)}">${escape(age(e.last))} ago</td></tr>`;}).join('')+'</tbody></table>';
- container.querySelectorAll('tbody tr').forEach(row=>{const open=()=>openDetail(rows[Number(row.dataset.index)],'events');row.onclick=open;row.onkeydown=e=>{if(e.key==='Enter')open();};});
- window.elD90Productivity.enhanceTable(container,{storageKey:'events-v2',onExport:text=>invoke('file:save',{text})});
+ const headers=['Type','Reason','Object','Namespace','Message','Count','Last seen'].map(c=>'<th>'+c+'</th>'),help='<p class="events-help">Newest events first · select a row for full details · Kubernetes retains events for a limited time.</p>';
+ const values=event=>{const e=window.elD90Events.normalize(event);return[e.type,e.reason,e.object,e.namespace,e.message,e.count,age(e.last)+' ago'];};
+ const row=(event,i)=>{const e=window.elD90Events.normalize(event);return `<tr role="button" tabindex="0" data-index="${i}" aria-label="Event ${escape(e.reason)} ${escape(e.object)}">${values(event).map((v,j)=>'<td'+(j===4?' class="event-message"':'')+'>'+(j===0?'<span class="pill '+(e.type==='Warning'?'red':'green')+'">'+escape(v)+'</span>':escape(v))+'</td>').join('')}</tr>`;};
+ const tableOptions={storageKey:'events-v2',onExport:text=>invoke('file:save',{text})};
+ if(rows.length>50)return window.elD90VirtualTable.mount(container,{items:rows,headers,help,className:'events-table',row,values,open:event=>openDetail(event,'events'),enhance:window.elD90Productivity.enhanceTable,tableOptions});
+ container.innerHTML=help+'<table class="events-table"><thead><tr>'+headers.join('')+'</tr></thead><tbody>'+rows.map(row).join('')+'</tbody></table>';
+ container.querySelectorAll('tbody tr').forEach(r=>{r.onclick=()=>openDetail(rows[Number(r.dataset.index)],'events');r.onkeydown=e=>{if(e.key==='Enter')r.click();};});window.elD90Productivity.enhanceTable(container,tableOptions);
 }
 async function loadResourceEvents(){const owner=state,object=owner.selected,epoch=owner.detailGeneration;const container=$('detail-events');container.innerHTML='<p>Loading events for this resource…</p>';try{if(!object?.metadata?.uid)throw Error('This resource has no UID for event lookup');const result=owner.demo?{items:[]}:await invoke('resource:events',{context:owner.context,namespace:object.metadata.namespace||'*',uid:object.metadata.uid});if(state!==owner||epoch!==owner.detailGeneration)return;container.innerHTML='<p>Events for this exact resource UID. Related Pods and ReplicaSets have their own events.</p><button id="refresh-resource-events" class="button secondary">Refresh events</button><div id="resource-events-table"></div>';renderEventsTable('resource-events-table',result.items||[]);$('refresh-resource-events').onclick=loadResourceEvents;}catch(e){if(state===owner&&epoch===owner.detailGeneration)container.textContent='Events unavailable: '+e.message;}}
 

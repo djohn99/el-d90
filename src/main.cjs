@@ -202,7 +202,7 @@ handle('helm:manifest', kube.helmManifest);
 handle('forward:start', input => forwards.start(input));
 handle('forward:stop', input => { forwards.stop(input.id); return true; });
 handle('forward:list', () => forwards.list());
-handle('kube:list', kube.list);
+handle('kube:list', (input,event)=>kube.list({...input,onPage:input.progress===true?items=>{if(!event.sender.isDestroyed())event.sender.send('kube:list-page',{context:input.context,requestId:input.requestId,resource:input.resource,items});}:undefined}));
 handle('resource-data:read',input=>require('./resource-data.cjs').read(input));
 handle('resource-data:write',input=>require('./resource-data.cjs').write(input));
 handle('secret:reveal', async input => {
