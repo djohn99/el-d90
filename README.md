@@ -8,9 +8,9 @@ An independent, local Kubernetes desktop workspace for macOS. Open multiple clus
 
 **[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
 
-[Direct DMG download for 0.5.6](https://github.com/djohn99/el-d90/releases/download/v0.5.6/el-d90-0.5.6-mac-arm64.dmg)
+[Direct DMG download for 0.5.7](https://github.com/djohn99/el-d90/releases/download/v0.5.7/el-d90-0.5.7-mac-arm64.dmg)
 
-Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.6) · [All releases](https://github.com/djohn99/el-d90/releases)
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.7) · [All releases](https://github.com/djohn99/el-d90/releases)
 
 1. Download the DMG using the link above.
 2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
@@ -35,10 +35,10 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
-To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.6/el-d90-0.5.6-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.7/el-d90-0.5.7-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
 
 ```sh
-shasum -a 256 -c el-d90-0.5.6-mac-arm64.dmg.sha256
+shasum -a 256 -c el-d90-0.5.7-mac-arm64.dmg.sha256
 ```
 
 ## Screenshots
@@ -53,9 +53,11 @@ Deployment inspection with combined replica logs:
 
 *Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
 
-## New in 0.5.6
+## New in 0.5.7
 
-**0.5.6** adds pagination for large resource tables, displays API pages as they arrive, and shows compact container status squares. See the [complete release notes](docs/releases/0.5.6.md).
+**0.5.7** simplifies the sidebar into familiar resource groups, adds configuration and networking resource views, separates Helm Charts and Releases, and restores valid AWS SSO sessions when returning to Connect clusters. See the [complete release notes](docs/releases/0.5.7.md).
+
+Sidebar sections collapse and remember their state. Extra tools including Resource map, Metrics, Troubleshooting, Applications and Node sessions are available under **File → Workspace tools**. Custom Resources contains Definitions and searchable API groups directly.
 
 Earlier workspace additions remain available:
 
@@ -72,19 +74,19 @@ Earlier workspace additions remain available:
 
 **AWS SSO / EKS:** Open **File → Connect clusters → AWS SSO → EKS**. Sign in and discover your assigned accounts and roles, then choose an account and role. Selecting a role prepares its profile and loads EKS clusters automatically. Alternatively, select a saved AWS CLI profile and region and sign in if needed. Choose your cluster and click **Connect to cluster** to open its workspace automatically. If listing is restricted, enter a known cluster name. AWS CLI v2 manages credential caching and `eks get-token`; el-d90 never asks for copied access tokens.
 
-To discover your assignments, choose **Sign in & discover roles**. The app pre-fills a known SSO portal URL/region when available, or you can enter your organization’s AWS access portal `/start` URL and SSO region. Complete browser sign-in first; only then does AWS return your assigned accounts. Choose **AWS account → Assigned role**. Selecting the role automatically saves a separate named AWS CLI profile for that account/role and loads its clusters. You can repeat the selection for another role without signing in again while the discovery session is valid. This flow does not change AWS or Kubernetes permissions. OAuth tokens remain in the background process and the private AWS CLI SSO cache, never in the renderer or kubeconfig.
+To discover your assignments, choose **Sign in & discover roles**. The app pre-fills a known SSO portal URL/region when available, or you can enter your organization’s AWS access portal `/start` URL and SSO region. Complete browser sign-in first; only then does AWS return your assigned accounts. Choose **AWS account → Assigned role**. Selecting the role automatically saves a separate named AWS CLI profile for that account/role and loads its clusters. You can repeat the selection for another role without signing in again while the discovery session is valid. Returning to Connect clusters or restarting restores a valid saved SSO session and its selected account/role when available; expired sessions still require browser sign-in. This flow does not change AWS or Kubernetes permissions. OAuth tokens remain in the background process and the private AWS CLI SSO cache, never in the renderer or kubeconfig.
 
 **AWS proxy troubleshooting:** Finder launches import exported proxy/CA/config paths and resolve the AWS executable from the login shell. In **AWS executable & proxy settings**, optional per-Mac overrides apply to CLI discovery and EKS token environments. Blank fields use automatic settings; re-add the EKS connection after changing its executable. **Check AWS connection** reports sanitized checks without identity payloads or proxy credentials. TLS verification stays enabled. A company proxy may require its trusted CA bundle. The affected second-Mac connection remains to be verified by its user.
 
 The advanced **Set up a new SSO profile** form remains available for manual setup. Existing profile names and the default profile are never overwritten; configuration changes create a private backup. Existing non-SSO profiles may load EKS clusters using their configured credentials. New EKS kubeconfigs are stored privately in the app profile and loaded immediately; your global kubeconfig/current-context is unchanged. EKS discovery and Kubernetes access depend on the selected role’s existing permissions. See [AWS SSO configuration](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html).
 
-Sidebar section headings use bold text; section and Custom API Groups collapse preferences are remembered.
+Sidebar sections and individual custom API groups remember their collapse preferences.
 
 Recent resource workflow improvements:
 
 - ConfigMap Details now show multiline per-key text and labelled binary data, key filtering, copy, add/remove/edit fields and **Review YAML changes**. Editing loads the current manifest; unrelated fields, exact identity and binary values are preserved. Existing YAML drafts are protected. Validate and Apply retain their usual server/native confirmation workflow.
 - Secret values have per-key show/hide/copy and edit-to-YAML controls. UTF-8 edits are base64-encoded before staging; other keys stay intact. Revealed values and edit buffers are cleared on panel/tab/context changes. Clipboard writes happen only when Copy is clicked.
-- All 31 built-in resource kinds use type-specific detail fields, applicable tabs, workload container status/resources and declared resource references. HPA current metrics, VPA recommendations, storage and RBAC references appear where reported. Custom APIs retain their schema/YAML and available conditions.
+- All 39 built-in resource kinds use type-specific detail fields, applicable tabs, workload container status/resources and declared resource references. HPA current metrics, VPA recommendations, storage and RBAC references appear where reported. Custom APIs retain their schema/YAML and available conditions.
 - Pods, Nodes, Deployments and Overview render resource rows before optional metrics arrive. Delayed responses stay with their exact cluster/generation. Permission checks are limited to applicable actions. In an isolated fixture with a 1,500 ms metrics delay, first Pod paint improved from 1,790.7 ms to 80.6 ms; this is a controlled rendering result, not a universal cluster speed claim.
 
 AI remains disabled. These additions use el-d90 implementations and the upstream Monaco dependency; no Headlamp implementation code is bundled.
@@ -95,7 +97,7 @@ AI remains disabled. These additions use el-d90 implementations and the upstream
 - Workloads, networking, storage, RBAC, Events and dynamically discovered APIs/custom resources.
 - Resource creation/import, YAML editing, local validation, server dry-run and confirmed apply.
 - Secret detail **Reveal decoded values** / **Hide values** controls, with native confirmation and panel-only display. UTF-8 data is decoded; binary data is labelled as base64.
-- HPA and VPA under **More Workloads**, with VPA target, update policy and container recommendations when the API/controller is installed and accessible.
+- HPA and VPA under **Config**, with VPA target, update policy and container recommendations when the API/controller is installed and accessible.
 - Deployment logs aggregated across replicas, Pod logs and interactive Pod shells.
 - General local cluster terminals with multiple terminal/log sessions per cluster. Drag the panel’s top edge to resize; close individual sessions or dismiss the panel.
 - Dedicated Cluster page with CPU, memory and Pod capacity rings, requests/limits, worker/control-plane filters and CPU/memory history across all namespaces. Overview retains workload health and recent activity for the selected namespaces.
@@ -204,7 +206,7 @@ npm test
 npm run test:desktop-all
 ```
 
-The backend suite has 238 checks. Twenty-seven desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal and selected-session closure. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
+The backend suite has 241 checks. Twenty-seven desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal and selected-session closure. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
 
 To test an existing package, set `EL_D90_APP_EXECUTABLE` to its executable path. Automated tests do not require real cluster credentials. Live node SSH, privileged debug and Helm mutations are not established by fixture tests.
 
@@ -247,7 +249,7 @@ Download official builds from [this repository’s Releases](https://github.com/
 
 ## Automated releases
 
-Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.6` for version `0.5.6`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.7` for version `0.5.7`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
 
 After committing your next changes:
 
