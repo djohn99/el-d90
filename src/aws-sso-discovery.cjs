@@ -5,14 +5,40 @@ const { SSOClient, paginateListAccounts, paginateListAccountRoles } = require('@
 const { region, configMetadata, safeError } = require('./aws-connections.cjs');
 function portal(value) { const url = new URL(value); if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.hostname.endsWith('.awsapps.com') || !/^\/start\/?$/.test(url.pathname)) throw Error('Enter your HTTPS AWS access portal /start URL'); return url.href; }
 class SSODiscovery {
-  constructor(aws, options = {}) { this.aws = aws; this.options = options; this.jobs = new Map(); }
-  async portals() { const sections = configMetadata(await this.aws.configText()), portals = []; for (const item of sections.values()) { if (!item.sso_start_url || !item.sso_region) continue; try { const startUrl = portal(item.sso_start_url), ssoRegion = region(item.sso_region); if (!portals.some(p => p.startUrl === startUrl && p.ssoRegion === ssoRegion)) portals.push({ startUrl, ssoRegion }); } catch {} } const active=[...this.jobs.values()].find(job=>job.state==='running'||job.state==='complete'&&Date.now()<job.expiresAt); return { portals, ...(active?{active:{...this.view(active),startUrl:active.startUrl,ssoRegion:active.ssoRegion}}:{}) }; }
-  view(job) { return { id: job.id, state: job.state, message: job.message, accounts: job.accounts || [] }; }
+  constructor(aws, options = {}) { this.aws = aws; this.options = options; this.jobs = new Map(); this.generation=0; }
+  async portals(input={}) {
+    const sections=configMetadata(await this.aws.configText()),portals=[];
+    for(const item of sections.values()){if(!item.sso_start_url||!item.sso_region)continue;try{const startUrl=portal(item.sso_start_url),ssoRegion=region(item.sso_region);if(!portals.some(p=>p.startUrl===startUrl&&p.ssoRegion===ssoRegion))portals.push({startUrl,ssoRegion});}catch{}}
+    const requested=sections.get(input.profile==='default'?'default':'profile '+input.profile),requestedSession=requested?.sso_session?sections.get('sso-session '+requested.sso_session):null;
+    const matches=j=>!requestedSession||j.startUrl===requestedSession.sso_start_url&&j.ssoRegion===requestedSession.sso_region;
+    let active=[...this.jobs.values()].find(j=>matches(j)&&j.selection?.profile===input.profile&&j.state==='complete'&&Date.now()<j.expiresAt)||[...this.jobs.values()].find(j=>matches(j)&&(j.state==='running'||j.state==='complete'&&Date.now()<j.expiresAt));
+    if(!active){if(!this.restoring)this.restoring=this.restore(sections,input.profile).finally(()=>{this.restoring=null;});active=await this.restoring;}
+    if(active?.state==='complete'&&requestedSession&&matches(active)&&active.accounts.some(a=>a.id===requested.sso_account_id))active.selection={profile:input.profile,account:requested.sso_account_id,role:requested.sso_role_name};
+    return {portals,...(active?{active:{...this.view(active),startUrl:active.startUrl,ssoRegion:active.ssoRegion}}:{})};
+  }
+  async restore(sections,preferred){
+    const generation=this.generation;const entries=[...sections].filter(([,v])=>v.sso_session&&v.sso_account_id&&v.sso_role_name);entries.sort(([a],[b])=>Number(b==='profile '+preferred)-Number(a==='profile '+preferred));
+    for(const [key,profile] of entries){
+      const config=sections.get('sso-session '+profile.sso_session);if(!config)continue;
+      let job;try{
+        const startUrl=portal(config.sso_start_url),ssoRegion=region(config.sso_region),file=path.join(this.options.cacheDir||path.join(os.homedir(),'.aws/sso/cache'),crypto.createHash('sha1').update(profile.sso_session).digest('hex')+'.json');
+        if((await fs.stat(file)).size>1024*1024)continue;
+        const cache=JSON.parse(await fs.readFile(file,'utf8')),expiresAt=Date.parse(cache.expiresAt);
+        if(cache.startUrl!==startUrl||cache.region!==ssoRegion||typeof cache.accessToken!=='string'||!cache.accessToken||!Number.isFinite(expiresAt)||expiresAt<=Date.now()||!cache.clientId||!cache.clientSecret||!Number.isFinite(Date.parse(cache.registrationExpiresAt)))continue;
+        job={id:crypto.randomUUID(),startUrl,ssoRegion,state:'complete',message:'Restored your existing AWS SSO session.',controller:new AbortController(),expiresAt,token:{accessToken:cache.accessToken,refreshToken:cache.refreshToken,expiresIn:Math.floor((expiresAt-Date.now())/1000)},registration:{clientId:cache.clientId,clientSecret:cache.clientSecret,clientSecretExpiresAt:Date.parse(cache.registrationExpiresAt)/1000}};
+        job.accounts=await this.accounts(job);if(generation!==this.generation||Date.now()>=job.expiresAt){job.controller.abort();return null;}if(!job.accounts.some(a=>a.id===profile.sso_account_id))continue;
+        job.selection={profile:key==='default'?'default':key.replace(/^profile /,''),account:profile.sso_account_id,role:profile.sso_role_name};
+        this.jobs.set(job.id,job);job.timer=setTimeout(()=>this.cancel({id:job.id}),Math.min(job.expiresAt-Date.now(),2147483647));job.timer.unref?.();return job;
+      }catch{job?.controller.abort();}
+    }
+    return null;
+  }
+  view(job) { return { id: job.id, state: job.state, message: job.message, accounts: job.accounts || [], ...(job.selection?{selection:job.selection}:{}), ...(job.expiresAt?{expiresAt:job.expiresAt}:{}) }; }
   status({ id }) { const job = this.jobs.get(id); if (!job) throw Error('SSO sign-in not found'); return this.view(job); }
   cancel({ id }) { const job = this.jobs.get(id); if (job) { job.controller.abort(); clearTimeout(job.timer); job.token = null; job.registration = null; job.authorizationUrl=null; job.state = 'cancelled'; job.message = 'SSO discovery cancelled.'; } return job ? this.view(job) : { state: 'cancelled' }; }
-  close() { for (const id of this.jobs.keys()) this.cancel({ id }); }
+  close() { ++this.generation;for (const id of this.jobs.keys()) this.cancel({ id }); }
   async start(input) {
-    const startUrl = portal(input.startUrl), ssoRegion = region(input.ssoRegion);
+    const startUrl = portal(input.startUrl), ssoRegion = region(input.ssoRegion);++this.generation;
     for (const id of this.jobs.keys()) this.cancel({ id }); this.jobs.clear();
     const job = { id: crypto.randomUUID(), startUrl, ssoRegion, state: 'running', message: 'Complete browser sign-in, then choose Allow access for el-d90 Kubernetes desktop.', controller: new AbortController() }; this.jobs.set(job.id, job);
     this.authenticate(job).catch(error => { if (job.controller.signal.aborted) return; job.state = 'failed'; job.message = safeError(error); job.token = null; job.registration = null; });
@@ -61,6 +87,7 @@ class SSODiscovery {
     this.session(input.id);
     const cache = { startUrl: job.startUrl, region: job.ssoRegion, accessToken: job.token.accessToken, expiresAt: new Date(job.expiresAt).toISOString(), clientId: job.registration.clientId, clientSecret: job.registration.clientSecret, registrationExpiresAt: new Date(job.registration.clientSecretExpiresAt * 1000).toISOString(), ...(job.token.refreshToken ? { refreshToken: job.token.refreshToken } : {}) };
     try { await fs.writeFile(temporary, JSON.stringify(cache), { mode: 0o600, flag: 'wx' }); await fs.rename(temporary, file); } finally { await fs.rm(temporary, { force: true }); }
+    job.selection={profile:name,account:input.account,role:input.role};
     return { profile: name, account: input.account, role: input.role, message: 'SSO role selected. Load EKS clusters to continue.' };
   }
 }

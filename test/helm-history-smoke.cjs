@@ -1,3 +1,4 @@
+const {sidebarView}=require('./navigation-helpers.cjs');
 const {chooseContext,fileView}=require('./navigation-helpers.cjs');
 const {_electron}=require('playwright');
 const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const os=require('node:os');
@@ -9,12 +10,12 @@ async function text(page,id,value){await page.locator(id).filter({hasText:value}
  app=await _electron.launch({executablePath:process.env.EL_D90_APP_EXECUTABLE||require('electron'),args:process.env.EL_D90_APP_EXECUTABLE?[]:[root],cwd:root,env:{...process.env,ELECTRON_RUN_AS_NODE:'',EL_D90_USER_DATA:path.join(temp,'profile'),EL_D90_KUBECTL:path.join(__dirname,'mock-kubectl.cjs'),EL_D90_HELM:path.join(__dirname,'mock-helm.cjs'),EL_D90_TEST_METRIC_LABEL:'-2+3',EL_D90_TEST_METRIC_NEGATIVE:'1',EL_D90_TEST_RECORD:record}});
  const page=await app.firstWindow();await page.setViewportSize({width:1460,height:940});page.on('pageerror',e=>errors.push(e.message));
  await page.locator('#context option[value="fixture-a"]').waitFor({state:'attached'});await chooseContext(page,'fixture-a');await page.locator('#overview-table tbody tr').first().waitFor();
- await page.locator('.nav-item[data-view="metrics"]').click();await page.locator('#history-source option[value="0"]').waitFor({state:'attached'});await page.locator('#history-source').selectOption('0');
+ await sidebarView(page,'metrics');await page.locator('#history-source option[value="0"]').waitFor({state:'attached'});await page.locator('#history-source').selectOption('0');
  await text(page,'.history-status','');await page.locator('.history-chart-wrap svg').waitFor();assert.match(await page.locator('.history-summary').textContent(),/2 samples/);
  await page.locator('#history-range').selectOption('6h');await page.locator('.history-chart-wrap svg').waitFor();
  await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},path.join(temp,'history.csv'));
  await page.locator('#history-export').click();await page.waitForTimeout(100);assert.match(fs.readFileSync(path.join(temp,'history.csv'),'utf8'),/timestamp/);assert.ok(fs.readFileSync(path.join(temp,'history.csv'),'utf8').includes("\"'-2+3\""));assert.ok(fs.readFileSync(path.join(temp,'history.csv'),'utf8').includes('"-0.1"'));assert.equal(fs.readFileSync(path.join(temp,'history.csv'),'utf8').includes("\"'-0.1\""),false);
- await page.locator('.nav-item[data-view="helm"]').click();await page.locator('#helm-install-panel summary').click();
+ await sidebarView(page,'helm');await page.locator('#helm-install-panel summary').click();
  await page.locator('#helm-install-name').fill('new-fixture');await page.locator('#helm-install-namespace').fill('team');await page.locator('#helm-install-chart').fill('fixture/web');await page.locator('#helm-install-values').fill('replicaCount: 2\n');
  await page.locator('#helm-install-preview').click();await text(page,'#helm-install-preview-status','Preview ready');assert.equal(await page.locator('#helm-install-version').inputValue(),'1.2.0');
  await app.evaluate(({dialog})=>{globalThis.confirmations=[];dialog.showMessageBox=async(_w,options)=>{globalThis.confirmations.push(options);return {response:0};};});
@@ -30,6 +31,6 @@ async function text(page,id,value){await page.locator(id).filter({hasText:value}
  await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:0});});await page.locator('.helm-rollback').click();await text(page,'#helm-release-output','cancelled');await page.locator('#helm-uninstall').click();await text(page,'#helm-release-output','cancelled');
  assert.equal(calls().some(c=>c.args[0]==='helm'&&['rollback','uninstall'].includes(c.args[1])),false);
  const confirmations=await app.evaluate(()=>globalThis.confirmations);assert.ok(confirmations.some(c=>c.detail.includes('fixture-a')&&c.detail.includes('team')));
- await page.getByRole('button',{name:'Close details'}).click();await page.locator('.nav-item[data-view="pods"]').click();await page.getByRole('button',{name:'Open fixture-pod',exact:true}).click();await page.locator('#describe-resource').click();await text(page,'#resource-management-output','fixture operation completed');await page.locator('#resource-confirm-name').fill('fixture-pod');await page.locator('#delete-resource').click();await text(page,'#resource-management-output','cancelled');assert.equal(calls().some(c=>c.args[0]==='delete'),false);
+ await page.getByRole('button',{name:'Close details'}).click();await sidebarView(page,'pods');await page.getByRole('button',{name:'Open fixture-pod',exact:true}).click();await page.locator('#describe-resource').click();await text(page,'#resource-management-output','fixture operation completed');await page.locator('#resource-confirm-name').fill('fixture-pod');await page.locator('#delete-resource').click();await text(page,'#resource-management-output','cancelled');assert.equal(calls().some(c=>c.args[0]==='delete'),false);
  assert.deepEqual(errors,[]);console.log('PASS: actual range samples/CSV, version-pinned Helm install/upgrade, changed-values preview invalidation, native target confirmation and rollback/uninstall cancellation');
 }finally{if(app)await app.close();fs.rmSync(temp,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1;});

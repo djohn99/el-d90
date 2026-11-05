@@ -1,3 +1,4 @@
+const {sidebarView}=require('./navigation-helpers.cjs');
 const {chooseContext,fileView}=require('./navigation-helpers.cjs');
 // Reusable offline Electron acceptance checks for independent cluster workspaces.
 const { _electron } = require('playwright');
@@ -71,7 +72,7 @@ async function text(page, selector, value) { await page.locator(selector).filter
     let page = await launch(true);
     await page.locator('#overview').waitFor({ state: 'visible' });
     await namespaces(page, ['production']);
-    await page.locator('.nav-item[data-view="pods"]').click(); await text(page, '#resource-count', '7 resources');
+    await sidebarView(page,'pods'); await text(page, '#resource-count', '7 resources');
     await namespaces(page, ['production', 'staging']); await text(page, '#resource-count', '9 resources');
     await page.locator('#search').fill('redis'); await text(page, '#resource-count', '1 resource');
     await page.getByRole('button', { name: 'Open redis-cache-0', exact: true }).click();
@@ -80,7 +81,7 @@ async function text(page, selector, value) { await page.locator(selector).filter
     const draft = 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: unsaved-workspace-a\n';
     await page.locator('#yaml-editor').fill(draft);
     await selectContext(page, 'demo-us-east');
-    await page.locator('.nav-item[data-view="deployments"]').click();
+    await sidebarView(page,'deployments');
     await namespaces(page, ['staging']);
     await tab(page, 'demo-eu-west');
     assert.equal(await page.locator('#search').inputValue(), 'redis');
@@ -96,7 +97,7 @@ async function text(page, selector, value) { await page.locator(selector).filter
 
     page = await launch();
     await selectContext(page, 'fixture-a');
-    await page.locator('.nav-item[data-view="pods"]').click();
+    await sidebarView(page,'pods');
     await page.getByRole('button', { name: 'Open pod-a', exact: true }).click();
     await page.locator('[data-tab="logs"]').click(); await text(page, '#logs-output', 'LOG_CONNECTED fixture-a');
     await page.locator('[data-tab="terminal"]').click(); await page.locator('#connect-terminal').click();
@@ -104,7 +105,7 @@ async function text(page, selector, value) { await page.locator(selector).filter
     const aPids = calls().filter(c => c.context === 'fixture-a' && ['logs', 'exec'].includes(c.args[0])).map(c => c.pid);
     await selectContext(page, 'fixture-b');
     assert.ok(aPids.every(alive), 'Switching context must keep cluster A sessions alive');
-    await page.locator('.nav-item[data-view="pods"]').click();
+    await sidebarView(page,'pods');
     await page.getByRole('button', { name: 'Open pod-b', exact: true }).click();
     await page.locator('[data-tab="logs"]').click(); await text(page, '#logs-output', 'LOG_CONNECTED fixture-b');
     await page.locator('[data-tab="terminal"]').click(); await page.locator('#connect-terminal').click();
@@ -123,9 +124,9 @@ async function text(page, selector, value) { await page.locator(selector).filter
 
     await page.locator('#close-drawer').click();
     await namespaces(page, ['team', 'ops']);
-    await page.locator('.nav-item[data-view="deployments"]').click();
+    await sidebarView(page,'deployments');
     await selectContext(page, 'fixture-a');
-    await page.locator('.nav-item[data-view="pods"]').click();
+    await sidebarView(page,'pods');
     // The old cluster's deliberately delayed request must not overwrite B.
     fs.writeFileSync(delayMarker, 'delay');
     await page.locator('#refresh').click();

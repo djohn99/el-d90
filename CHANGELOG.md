@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.7] - 2026-11-05
+
+### Added
+
+- Priority Classes, Runtime Classes, Leases, admission webhook configurations, admission policies/bindings and Ingress Classes with resource-specific columns.
+- Separate Helm Charts and Releases navigation.
+
+### Changed
+
+- Group sidebar resources into Workloads, Config, Network, Storage, Helm, Access Control and Custom Resources, with direct Cluster, Nodes, Namespaces and Events links.
+- Move extra utilities to File → Workspace tools and remove unrelated resource controls from Connect clusters.
+
+### Fixed
+
+- Restore valid AWS SSO sessions and account/role selections when reopening connections or restarting; real token expiry and assigned permissions still apply.
+- Keep custom API groups visible directly under Custom Resources, with working search and expandable resource links.
+
 ## [0.5.6] - 2026-11-05
 
 ### Added
