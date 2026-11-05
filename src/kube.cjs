@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const RESOURCES = Object.freeze({
+  ...Object.fromEntries(require('./navigation-resources.js').map(r=>[r.key,r])),
   pods: { title: 'Pods', namespaced: true },
   deployments: { title: 'Deployments', namespaced: true },
   statefulsets: { title: 'StatefulSets', namespaced: true },

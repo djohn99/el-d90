@@ -1,9 +1,10 @@
+const {sidebarView}=require('./navigation-helpers.cjs');
 const {_electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpdir(),'eld90-dismiss-'));let app;
 (async()=>{try{
  app=await _electron.launch({executablePath:process.env.EL_D90_APP_EXECUTABLE||require('electron'),args:[...(process.env.EL_D90_APP_EXECUTABLE?[]:[root]),'--demo'],cwd:root,env:{...process.env,ELECTRON_RUN_AS_NODE:'',EL_D90_USER_DATA:profile}});
  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.setViewportSize({width:1500,height:1000});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.waitForFunction(()=>typeof state!=='undefined'&&state.initialized&&!state.loading);
- await page.locator('[data-view=pods]').click();await page.waitForFunction(()=>state.view==='pods'&&!state.loading);
+ await sidebarView(page,'pods');await page.waitForFunction(()=>state.view==='pods'&&!state.loading);
  await page.locator('#namespace-multi').click();await page.locator('#namespace-options input[value=production]').check();await page.waitForFunction(()=>state.namespaces.length===1&&!state.loading);assert.equal(await page.locator('#resource-count').textContent(),'7 resources');assert.equal(await page.locator('#namespace-popover').isVisible(),true);
  await page.locator('#namespace-options input[value=staging]').check();await page.waitForFunction(()=>state.namespaces.length===2&&!state.loading);assert.equal(await page.locator('#resource-count').textContent(),'9 resources');assert.equal(await page.locator('.namespace-chip').count(),2);
  await page.locator('#namespace-options input[value=production]').uncheck();await page.waitForFunction(()=>state.namespaces.length===1&&!state.loading);assert.equal(await page.locator('#resource-count').textContent(),'2 resources');await page.locator('#namespace-wildcard').check();await page.waitForFunction(()=>state.namespaces.length===0&&!state.loading);assert.equal(await page.locator('#namespace-wildcard').isChecked(),true);

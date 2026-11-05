@@ -6,6 +6,7 @@ const base = kind => ({ kind, apiVersion: 'v1', metadata: { name: 'synthetic', n
 const fields = result => Object.fromEntries(result.fields.map(field => [field.label, field.value]));
 test('every built-in resource projects identity without fake Node/IP/container fields', () => {
   const kinds = { pods: 'Pod', deployments: 'Deployment', statefulsets: 'StatefulSet', daemonsets: 'DaemonSet', jobs: 'Job', cronjobs: 'CronJob', services: 'Service', ingresses: 'Ingress', configmaps: 'ConfigMap', persistentvolumeclaims: 'PersistentVolumeClaim', nodes: 'Node', namespaces: 'Namespace', events: 'Event', replicasets: 'ReplicaSet', replicationcontrollers: 'ReplicationController', horizontalpodautoscalers: 'HorizontalPodAutoscaler', poddisruptionbudgets: 'PodDisruptionBudget', secrets: 'Secret', resourcequotas: 'ResourceQuota', limitranges: 'LimitRange', serviceaccounts: 'ServiceAccount', endpoints: 'Endpoints', endpointslices: 'EndpointSlice', networkpolicies: 'NetworkPolicy', persistentvolumes: 'PersistentVolume', storageclasses: 'StorageClass', roles: 'Role', rolebindings: 'RoleBinding', clusterroles: 'ClusterRole', clusterrolebindings: 'ClusterRoleBinding', customresourcedefinitions: 'CustomResourceDefinition' };
+  Object.assign(kinds,Object.fromEntries(require('../src/navigation-resources.js').map(r=>[r.key,r.kind])));
   assert.deepEqual(Object.keys(kinds).sort(), Object.keys(kube.RESOURCES).sort());
   for (const [resource, kind] of Object.entries(kinds)) {
     const object = base(kind), result = details.model(object, resource), row = fields(result);
