@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('eld90', {
     if (!channels.has(channel)) return Promise.reject(new Error('Unsupported action'));
     return ipcRenderer.invoke(channel, data);
   },
+  onListPage(callback){const listener=(_event,value)=>callback(value);ipcRenderer.on('kube:list-page',listener);return()=>ipcRenderer.removeListener('kube:list-page',listener);},
   onNavigate(callback){const listener=(_event,view)=>callback(view);ipcRenderer.on('app:navigate',listener);return()=>ipcRenderer.removeListener('app:navigate',listener);},
   onSession(callback){const listener=(_e,value)=>callback(value);ipcRenderer.on('session:data',listener);return()=>ipcRenderer.removeListener('session:data',listener);},
   onWatch(callback){const listener=(_e,value)=>callback(value);ipcRenderer.on('watch:event',listener);return()=>ipcRenderer.removeListener('watch:event',listener);},
