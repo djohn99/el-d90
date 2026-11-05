@@ -195,7 +195,7 @@ Namespace checkboxes update the current view immediately and keep the picker ope
 - **Change history:** local metadata for actions through this app, excluding YAML, Helm values, terminal input and output. This is separate from cluster audit logs.
 - **Updates & setup:** manually check official GitHub releases and notes, inspect local kubectl/Helm/AWS CLI versions, and follow connection setup guidance. Unsigned updates require manual download and installation.
 
-Large resource tables render a scrolling window of rows; sorting and CSV export cover the complete loaded result. Search is debounced, and obsolete snapshot/chart/search requests are cancelled when changing views or clusters. Existing terminal and log sessions retain their cluster ownership.
+Large resource tables show 50 rows per page. Use **Previous**, **Next** and **Rows per page** to choose 50, 100 or 250 rows; sorting and CSV export cover the complete loaded result. API pages appear as they arrive, with a loaded/loading count. Hover over a square in the Pod **Containers** column for its container name, state and restart count. Search is debounced, and obsolete snapshot/chart/search requests are cancelled when changing views or clusters. Existing terminal and log sessions retain their cluster ownership.
 
 ## Tests
 
