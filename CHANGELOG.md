@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.8] - 2026-11-06
+
+### Added
+
+- In-editor YAML Find with case sensitivity, match counts, next/previous navigation, wraparound and keyboard shortcuts.
+- Find controls for plain values/data/settings editors, native rich/comparison editor search, log-filter shortcuts, rendered-page search and local terminal scrollback search.
+
+### Fixed
+
+- Escape closes Find or clears a nonempty log query before closing resource details/settings.
+- Plain-text search preserves match offsets after Unicode characters and treats pattern characters literally.
+- Terminal viewport adapts to Find controls and retains search matches after resizing.
+- Terminal-close acceptance check waits for process and renderer cleanup.
+
 ## [0.5.7] - 2026-11-05
 
 ### Added

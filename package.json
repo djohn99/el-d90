@@ -1,7 +1,7 @@
 {
   "name": "el-d90",
   "productName": "el-d90",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "Your local Kubernetes workspace",
   "author": "David John",
   "license": "MIT",
@@ -21,7 +21,7 @@
     "pretest": "npm run build:native",
     "test:workspaces": "node test/workspaces-smoke.cjs",
     "test:helm-history": "node test/helm-history-smoke.cjs",
-    "test:desktop-all": "npm run test:pagination && npm run test:navigation && npm run test:desktop && npm run test:workspaces && npm run test:helm-history && npm run test:node-access && npm run test:events && npm run test:scaling && npm run test:sessions && npm run test:display-map && npm run test:smart-palette && npm run test:columns && npm run test:column-resize && npm run test:cluster-dashboard && npm run test:workspace-tools && npm run test:dismissal && npm run test:map-projects && npm run test:editor-forms && npm run test:catalog-gitops-extensions && npm run test:connections && npm run test:secrets-autoscaling && npm run test:resource-data && npm run test:permission-details && npm run test:resource-paint && npm run test:secret-controls && npm run test:aws-connections && npm run test:kube-api",
+    "test:desktop-all": "npm run test:pagination && npm run test:navigation && npm run test:desktop && npm run test:workspaces && npm run test:helm-history && npm run test:node-access && npm run test:events && npm run test:scaling && npm run test:sessions && npm run test:display-map && npm run test:smart-palette && npm run test:columns && npm run test:column-resize && npm run test:cluster-dashboard && npm run test:workspace-tools && npm run test:dismissal && npm run test:map-projects && npm run test:editor-forms && npm run test:catalog-gitops-extensions && npm run test:connections && npm run test:secrets-autoscaling && npm run test:resource-data && npm run test:permission-details && npm run test:resource-paint && npm run test:secret-controls && npm run test:aws-connections && npm run test:kube-api && npm run test:text-find",
     "test:node-access": "node test/node-access-smoke.cjs",
     "test:events": "node test/events-smoke.cjs",
     "test:scaling": "node test/scaling-smoke.cjs",
@@ -46,13 +46,15 @@
     "test:kube-api": "node test/kube-api-smoke.cjs",
     "test:column-resize": "node test/column-resize-smoke.cjs",
     "test:navigation": "node test/navigation-ui-smoke.cjs",
-    "test:pagination": "node test/pagination-smoke.cjs"
+    "test:pagination": "node test/pagination-smoke.cjs",
+    "test:text-find": "node test/text-find-smoke.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-sso": "^3.1161.0",
     "@aws-sdk/client-sso-oidc": "^3.1161.0",
     "@kubernetes/client-node": "^2.0.1",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "0.16.0",
     "@xterm/xterm": "^6.0.0",
     "yaml": "^2.9.1"
   },
