@@ -7,6 +7,7 @@ Original el-d90 source is covered by the root MIT license. The following direct 
 | Electron | Desktop runtime | MIT; Chromium and other bundled components have additional notices included in Electron distributions |
 | @xterm/xterm | Terminal renderer | MIT |
 | @xterm/addon-fit | Terminal sizing | MIT |
+| @xterm/addon-search | Local terminal scrollback search and match highlighting | MIT |
 | @aws-sdk/client-sso, @aws-sdk/client-sso-oidc | IAM Identity Center account/role discovery and browser authorization | Apache-2.0 |
 | @kubernetes/client-node | Kubeconfig authentication, TLS and proxy configuration for persistent Kubernetes reads | Apache-2.0 |
 | yaml | YAML parsing | ISC |

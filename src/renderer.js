@@ -69,7 +69,7 @@ async function stopStreams() {
   const ids = [state.logs, state.terminal].filter(Boolean); state.logs = null; state.terminal = null;
   await Promise.all(ids.map(id => invoke('stream:stop', { id }).catch(() => {})));
 }
-async function closeDrawer() {window.elD90SecretValues.clear();window.elD90ResourceData.clear();keepDismissedDraft();window.elD90History.stop($('detail-metrics')); state.detailGeneration = ++detailEpoch; state.selected = null; hidden('drawer', true); await stopStreams(); }
+async function closeDrawer() {window.elD90TextFind?.close();window.elD90SecretValues.clear();window.elD90ResourceData.clear();keepDismissedDraft();window.elD90History.stop($('detail-metrics')); state.detailGeneration = ++detailEpoch; state.selected = null; hidden('drawer', true); await stopStreams(); }
 async function initializeContext(context) {
   state.loading=true;hidden('busy',false);
   await closeDrawer();state.readRequestId=crypto.randomUUID(); state.generation = ++requestEpoch;
@@ -175,7 +175,7 @@ function updatePageHeading(){
  hidden('namespace-warning',connecting||clusterScoped||!state.namespaceError);hidden('namespace-manual',connecting||clusterScoped||!state.namespaceError);
  if(connecting||clusterScoped){hidden('namespace-popover',true);$('namespace-multi').setAttribute('aria-expanded','false');}
 }
-async function navigate(view) {
+async function navigate(view) {window.elD90TextFind?.close();
   ++workspaceIntent;
   if(!WORKSPACE_VIEWS.includes(state.view))lastResourceView=captureView();workspaceUI?.cancel();window.elD90History.stopContext(state.context);clearTimeout(searchTimer);
   document.querySelector('main').scrollTop=0;state.view = view;$('page-title').innerHTML = `${escape(titles[view] || view)}<span class="heading-dot">.</span>`;
@@ -254,8 +254,8 @@ async function startLogs() {
 }
 function initTerminal() {
   if (state.terminalInstance) return;
-  const term = new Terminal({ cols: 100, rows: 28, fontFamily: 'Menlo, monospace', fontSize: 11, cursorBlink: true, scrollback: 4000, theme: { background: '#101719', foreground: '#c4d6c9', cursor: '#c1edb7', selectionBackground: '#45634b' }, ...window.elD90Settings.terminal() });
-  const owner = state; const host=document.createElement('div');host.className='workspace-terminal';owner.terminalHost=host;$('terminal').append(host);term.open(host);const fit=new FitAddon.FitAddon();term.loadAddon(fit);owner.fitAddon=fit;owner.resizeObserver=new ResizeObserver(()=>{if(host.offsetWidth>0)fit.fit();});owner.resizeObserver.observe(host);term.onResize(size=>{if(owner.terminal)invoke('terminal:resize',{id:owner.terminal,cols:Math.max(20,Math.min(400,size.cols)),rows:Math.max(5,Math.min(200,size.rows))}).catch(()=>{});});requestAnimationFrame(()=>fit.fit()); term.writeln(state.selectedKind==='nodes'?'el-d90 node terminal\r\nClick Open node shell to connect through Kubernetes.\r\n':'el-d90 pod terminal\r\nSelect a container and click Connect shell.\r\n');
+  const term = new Terminal({allowProposedApi:true, cols: 100, rows: 28, fontFamily: 'Menlo, monospace', fontSize: 11, cursorBlink: true, scrollback: 4000, theme: { background: '#101719', foreground: '#c4d6c9', cursor: '#c1edb7', selectionBackground: '#45634b' }, ...window.elD90Settings.terminal() });
+  const owner = state; const host=document.createElement('div');host.className='workspace-terminal';owner.terminalHost=host;$('terminal').append(host);term.open(host);owner.terminalFind=window.elD90TextFind?.attachTerminal(term,host,()=>owner.fitAddon?.fit());const fit=new FitAddon.FitAddon();term.loadAddon(fit);owner.fitAddon=fit;owner.resizeObserver=new ResizeObserver(()=>{if(host.offsetWidth>0)fit.fit();});owner.resizeObserver.observe(host);term.onResize(size=>{if(owner.terminal)invoke('terminal:resize',{id:owner.terminal,cols:Math.max(20,Math.min(400,size.cols)),rows:Math.max(5,Math.min(200,size.rows))}).catch(()=>{});});requestAnimationFrame(()=>fit.fit()); term.writeln(state.selectedKind==='nodes'?'el-d90 node terminal\r\nClick Open node shell to connect through Kubernetes.\r\n':'el-d90 pod terminal\r\nSelect a container and click Connect shell.\r\n');
   term.onData(data => { if (owner.terminal) invoke('terminal:write', { id: owner.terminal, data }).catch(error); }); state.terminalInstance = term;if(owner.terminalBuffer)term.write(owner.terminalBuffer);
 }
 async function connectTerminal() {
@@ -540,7 +540,7 @@ async function disconnectWorkspace(context) {
   if(owner===state)storeWorkspaceUI(owner);
   if(owner.drawerVisible && owner.yamlDraft && !window.confirm(`Disconnect ${shortContext(context)}? Unsaved editor changes and active pod sessions will be closed.`))return;
   if(!owner.demo)await invoke('workspace:close',{context});await sessionUI?.closeContext(context);
-  owner.resizeObserver?.disconnect();owner.terminalInstance?.dispose();owner.terminalHost?.remove();clusterWorkspaces.delete(key);
+  owner.resizeObserver?.disconnect();owner.terminalFind?.dispose();owner.terminalInstance?.dispose();owner.terminalHost?.remove();clusterWorkspaces.delete(key);
   if(owner===state){state=freshWorkspace('',owner.demo);const next=[...clusterWorkspaces.values()].find(w=>w.demo===state.demo);if(next)await selectContext(next.context);else{paintWorkspace();hidden('drawer',true);hidden('welcome',false);hidden('overview',true);hidden('resource-view',true);hidden('special-view',true);connection('Disconnected');}}
   renderClusterTabs();saveWorkspacePreferences();
 }
@@ -615,6 +615,7 @@ const editorTools=window.elD90Productivity.attachEditor({editor:$('yaml-editor')
 function editorState(){return{context:state.context,resource:state.selectedKind,name:state.selected?.metadata.name,namespace:state.selected?.metadata.namespace,isCreating:state.isCreating,key:JSON.stringify([state.demo,state.context,state.selectedKind,state.selected?.metadata.namespace,state.selected?.metadata.uid||state.selected?.metadata.name,state.isCreating]),original:state.originalYaml||'',demo:state.demo};}
 richEditor=window.elD90RichEditor.create({textarea:$('yaml-editor'),invoke,getState:editorState,monacoPath:'../assets/monaco/vs'});
 resourceForms=window.elD90ResourceForms.attach({textarea:$('yaml-editor'),invoke,getState:editorState});
+window.elD90TextFind.attach($('yaml-editor')).embed();
 async function openRelatedResource(owner,reference){
   if(state!==owner||reference.context&&reference.context!==owner.context)return;const expectedGeneration=owner.generation;
   try{const rows=owner.demo?window.demoWorkspace.list(reference.resource,'*').items:(await invoke('kube:list',{context:owner.context,namespace:reference.namespace || '*',resource:reference.resource})).items;if(state!==owner||owner.generation!==expectedGeneration)return;let object=rows.find(r=>r.metadata.name===reference.name&&(!reference.namespace||r.metadata.namespace===reference.namespace)&&(!reference.uid||r.metadata.uid===reference.uid));if(!object&&owner.demo)object={apiVersion:'v1',kind:reference.resourceKind || reference.resource,metadata:{name:reference.name,namespace:reference.namespace,labels:{demo:'generated'}},spec:{},status:{}};if(!object)throw new Error('The related resource no longer exists or is not visible to this context.');await openDetail(object,reference.resource);}catch(e){if(state===owner)error(e);}
@@ -722,7 +723,7 @@ document.addEventListener('pointerdown',event=>{
  const dialog=event.target.closest('dialog[open]');backdropDown=null;
  if(dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)backdropDown=dialog;return;}
  document.querySelectorAll('.node-column-picker[open]').forEach(p=>{if(!p.contains(event.target))p.open=false;});
- if(!$('drawer').classList.contains('hidden')&&!$('drawer').contains(event.target)&&!event.target.closest('#context,#context-trigger,#context-popover,#reload-contexts,.cluster-tab'))closeDrawer().catch(error);
+ if(!$('drawer').classList.contains('hidden')&&!$('drawer').contains(event.target)&&!event.target.closest('#context,#context-trigger,#context-popover,#reload-contexts,.cluster-tab,.text-find'))closeDrawer().catch(error);
 });
 document.addEventListener('click',event=>{if(!backdropDown)return;const dialog=backdropDown;backdropDown=null;const r=dialog.getBoundingClientRect();if(event.target===dialog&&(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)){if(dialog.dispatchEvent(new Event('cancel',{cancelable:true})))dialog.close();}});
 

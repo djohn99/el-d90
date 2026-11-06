@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -60,7 +60,7 @@ function trusted(event) {
 function handle(channel, fn) {
   ipcMain.handle(channel, async (event, input = {}) => {
     trusted(event);
-    if (demo && !['resource-data:read','resource-data:write','projects:list','projects:save','projects:remove','extensions:list','extensions:install','extensions:toggle','extensions:remove','catalog:list','editor:form-read','editor:form-write','editor:diagnostics','workspace:state','workspace:policy-set','read:cancel','release:check','release:open','file:save-image','settings:get','settings:appearance-draft','settings:save','settings:pick-kubeconfig','app:restart','app:info', 'file:save','editor:parse','editor:format','editor:diff'].includes(channel)) throw new Error('Demo mode is disconnected from Kubernetes');
+    if (demo && !['app:find','app:find-stop','resource-data:read','resource-data:write','projects:list','projects:save','projects:remove','extensions:list','extensions:install','extensions:toggle','extensions:remove','catalog:list','editor:form-read','editor:form-write','editor:diagnostics','workspace:state','workspace:policy-set','read:cancel','release:check','release:open','file:save-image','settings:get','settings:appearance-draft','settings:save','settings:pick-kubeconfig','app:restart','app:info', 'file:save','editor:parse','editor:format','editor:diff'].includes(channel)) throw new Error('Demo mode is disconnected from Kubernetes');
     const ownedContext=channel==='session:write'?sessions.entries.get(input.id)?.context:channel==='terminal:write'?streams.get(input.id)?.context:null;
     const request=ownedContext?{...input,context:ownedContext}:input;
     await workspacePolicy.assertAllowed(channel,request);
@@ -255,8 +255,11 @@ handle('file:save', async input => {
   if (!target.canceled && target.filePath) await fs.writeFile(target.filePath, input.text, 'utf8');
   return !target.canceled;
 });
+handle('app:find',input=>{if(typeof input.query!=='string'||!input.query||input.query.length>1000)throw Error('Enter search text up to 1000 characters');return{id:window.webContents.findInPage(input.query,{forward:input.forward!==false,findNext:input.findNext===true,matchCase:input.matchCase===true})};});
+handle('app:find-stop',()=>{window.webContents.stopFindInPage('clearSelection');return{};});
 async function createWindow() {
   window = new BrowserWindow({ width: 1460, height: 940, minWidth: 1080, minHeight: 700, title: 'el-d90', backgroundColor: '#101519', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 20, y: 21 }, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true } });
+  window.webContents.on('found-in-page',(_event,result)=>window?.webContents.send('app:find-result',result));
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', e => e.preventDefault());
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -274,10 +277,13 @@ app.whenReady().then(async () => {
   try{appliedSettings=await settingsStore.read(settingsPath());kube.setKubeconfigPaths(settingsStore.resolvePaths(appliedSettings));}catch(e){settingsError='Settings could not be loaded: '+e.message;}
   app.setAboutPanelOptions({applicationName:'el-d90',applicationVersion:app.getVersion(),copyright:'Copyright © 2026 David John',credits:'Created and maintained by David John (@djohn99).\nhttps://github.com/djohn99/el-d90'});
   try{const records=JSON.parse(await fs.readFile(journalPath(),'utf8'));nodes.restoreOwned(records);}catch(e){if(e.code!=='ENOENT')nodeCleanupErrors.set('journal','Debug recovery metadata could not be loaded: '+e.message);}
+  const editMenu=Menu.buildFromTemplate([{role:'editMenu'}]).items[0];
+  editMenu.submenu.append(new MenuItem({type:'separator'}));
+  editMenu.submenu.append(new MenuItem({label:'Find…',id:'find-text',accelerator:'CmdOrCtrl+F',click:()=>window?.webContents.send('app:open-find')}));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'el-d90', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit' }] },
     require('./application-menu.cjs').fileMenu(view=>window?.webContents.send('app:navigate',view)),
-    { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
+    editMenu, { role: 'viewMenu' }, { role: 'windowMenu' },
   ]));
   return createWindow();
 });
