@@ -1,7 +1,7 @@
 {
   "name": "el-d90",
   "productName": "el-d90",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "Your local Kubernetes workspace",
   "author": "David John",
   "license": "MIT",

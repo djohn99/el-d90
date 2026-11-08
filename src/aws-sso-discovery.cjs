@@ -4,6 +4,16 @@ const { SSOOIDCClient, RegisterClientCommand, StartDeviceAuthorizationCommand, C
 const { SSOClient, paginateListAccounts, paginateListAccountRoles } = require('@aws-sdk/client-sso');
 const { region, configMetadata, safeError } = require('./aws-connections.cjs');
 function portal(value) { const url = new URL(value); if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.hostname.endsWith('.awsapps.com') || !/^\/start\/?$/.test(url.pathname)) throw Error('Enter your HTTPS AWS access portal /start URL'); return url.href; }
+// IAM Identity Center may return the regional signin.aws approval platform.
+// https://docs.aws.amazon.com/singlesignon/latest/userguide/enable-identity-center-portal-access.html
+function authorizationURL(value,ssoRegion) {
+  let url;try{url=new URL(value);}catch{throw Error('Invalid AWS authorization destination');}
+  region(ssoRegion);const host=url.hostname;
+  const modern=/^[a-z]{2}(?:-[a-z]+)+-\d\.(?:sso\.)?signin\.aws$/.test(host)||/^[a-z]{2}(?:-[a-z]+)+-\d\.signin\.aws\.amazon\.com$/.test(host)||host==='signin.aws.amazon.com';
+  const legacy=host.endsWith('.amazonaws.com')||host.endsWith('.awsapps.com');
+  if(url.protocol!=='https:'||url.username||url.password||url.port&&url.port!=='443'||!modern&&!legacy)throw Error('Invalid AWS authorization destination');
+  return url.href;
+}
 class SSODiscovery {
   constructor(aws, options = {}) { this.aws = aws; this.options = options; this.jobs = new Map(); this.generation=0; }
   async portals(input={}) {
@@ -51,9 +61,8 @@ class SSODiscovery {
     try {
       const registration = await send(new RegisterClientCommand({ clientName: 'el-d90 Kubernetes desktop', clientType: 'public', scopes: ['sso:account:access'] })); job.registration = registration;
       const device = await send(new StartDeviceAuthorizationCommand({ clientId: registration.clientId, clientSecret: registration.clientSecret, startUrl: job.startUrl }));
-      const url = new URL(device.verificationUriComplete || device.verificationUri);
-      if (url.protocol !== 'https:' || url.username || url.password || !(url.hostname.endsWith('.amazonaws.com') || url.hostname.endsWith('.awsapps.com'))) throw Error('Invalid AWS authorization destination');
-      if (signal.aborted) return; job.authorizationUrl=url.href; await this.options.openExternal(url.href);
+      const approvalUrl = authorizationURL(device.verificationUriComplete || device.verificationUri,job.ssoRegion);
+      if (signal.aborted) return; job.authorizationUrl=approvalUrl; await this.options.openExternal(approvalUrl);
       const deadline = Date.now() + Math.min(device.expiresIn || 600, 900) * 1000; let interval = Math.max(device.interval || 5, 1) * 1000;
       while (!signal.aborted && Date.now() < deadline) {
         await (this.options.wait || ((ms, signal) => require('node:timers/promises').setTimeout(ms, undefined, { signal })))(interval, signal);
@@ -91,4 +100,4 @@ class SSODiscovery {
     return { profile: name, account: input.account, role: input.role, message: 'SSO role selected. Load EKS clusters to continue.' };
   }
 }
-module.exports = { SSODiscovery, portal };
+module.exports = { SSODiscovery, portal, authorizationURL };

@@ -14,6 +14,7 @@ function configMetadata(source) {
 }
 function safeError(error) {
   const value = String(error?.message || error);
+  if (/Invalid AWS authorization destination/.test(value)) return 'AWS returned an unsupported browser sign-in address. Update el-d90 and try Sign in & discover roles again.';
   if (/abort|cancel/i.test(value)) return 'Cancelled.';
   if (/bad CPU type|exec format/i.test(value)) return 'AWS CLI has the wrong CPU architecture. Install the Apple Silicon AWS CLI.';
   if (/SSL|CERTIFICATE_VERIFY_FAILED|certificate verify failed|unable to get local issuer/i.test(value)) return 'AWS CLI could not verify the server certificate. Check your company CA bundle configuration; TLS verification remains enabled.';
