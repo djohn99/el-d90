@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.9] - 2026-11-08
+
+### Fixed
+
+- Open official regional AWS `signin.aws` browser approval pages during SSO sign-in instead of rejecting them before the browser opens.
+- Accept official approval pages across AWS regions while retaining HTTPS, hostname, credentials and port checks.
+- Show an actionable unsupported sign-in address error and clarify that the IAM Identity Center region can differ from the EKS cluster region.
+
 ## [0.5.8] - 2026-11-06
 
 ### Added
