@@ -8,9 +8,9 @@ An independent, local Kubernetes desktop workspace for macOS. Open multiple clus
 
 **[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
 
-[Direct DMG download for 0.5.9](https://github.com/djohn99/el-d90/releases/download/v0.5.9/el-d90-0.5.9-mac-arm64.dmg)
+[Direct DMG download for 0.5.10](https://github.com/djohn99/el-d90/releases/download/v0.5.10/el-d90-0.5.10-mac-arm64.dmg)
 
-Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.9) · [All releases](https://github.com/djohn99/el-d90/releases)
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.10) · [All releases](https://github.com/djohn99/el-d90/releases)
 
 1. Download the DMG using the link above.
 2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
@@ -35,10 +35,10 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
-To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.9/el-d90-0.5.9-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.10/el-d90-0.5.10-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
 
 ```sh
-shasum -a 256 -c el-d90-0.5.9-mac-arm64.dmg.sha256
+shasum -a 256 -c el-d90-0.5.10-mac-arm64.dmg.sha256
 ```
 
 ## Screenshots
@@ -53,9 +53,9 @@ Deployment inspection with combined replica logs:
 
 *Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
 
-## New in 0.5.9
+## New in 0.5.10
 
-**0.5.9** fixes AWS SSO browser sign-in for official regional `signin.aws` approval pages, supports approval redirects across AWS regions, and clarifies the separate SSO and EKS region settings. See the [complete release notes](docs/releases/0.5.9.md).
+**0.5.10** fixes AWS SSO browser sign-in for official regional `signin.aws` approval pages, supports approval redirects across AWS regions, and clarifies the separate SSO and EKS region settings. See the [complete release notes](docs/releases/0.5.10.md).
 
 Sidebar sections collapse and remember their state. Extra tools including Resource map, Metrics, Troubleshooting, Applications and Node sessions are available under **File → Workspace tools**. Custom Resources contains Definitions and searchable API groups directly.
 
@@ -186,7 +186,7 @@ Use **Create resource** for arbitrary YAML/JSON, multiple documents and installe
 
 Session output and YAML drafts stay in memory. Workspace preferences retain context names, namespace sets, views and historical source settings. A legacy `Harbor` profile directory is retained for compatibility with early development builds.
 
-Namespace checkboxes update the current view immediately and keep the picker open for multiple selections. Click outside a pop-up, resource drawer or settings dialog to dismiss it. Unsaved resource YAML is retained in memory for reopening; dismissing Settings cancels its unsaved appearance preview.
+Namespace checkboxes update the current view immediately and keep the picker open for multiple selections. Click outside a pop-up, resource drawer or settings dialog to dismiss it. Unsaved resource YAML and ConfigMap data edits are retained in memory for reopening; dismissing Settings cancels its unsaved appearance preview.
 
 ## Troubleshooting and workspace tools
 
@@ -203,6 +203,8 @@ Large resource tables show 50 rows per page. Use **Previous**, **Next** and **Ro
 
 ## Find text
 
+Opening a resource **Terminal** tab connects its shell automatically; returning to an active terminal reuses the session. Node shells still require confirmation for the temporary privileged Pod.
+
 Use **Find · ⌘F** beside a YAML or values editor, or **Edit → Find…**. In the resource YAML editor, Find floats at the top right inside the editor without adding a row or resizing it. Plain editors support match counts, case sensitivity, next/previous and wraparound; Enter and Shift+Enter move between matches. Escape closes Find before closing resource details or settings. Rich YAML and comparison editors use their native Find widget.
 
 With a log viewer active, ⌘F focuses its existing log filter; Escape clears the query first. Terminal Find searches its buffered scrollback locally, with match navigation and highlighting. Outside editors, terminals and logs, Find searches currently rendered page text. The resource table filter still searches the full loaded list across pagination. Searches do not apply manifests or save query text. See the [search usability audit](docs/qa-search-2026-11-06.md) for the tested scope and environment limitations.
@@ -214,7 +216,7 @@ npm test
 npm run test:desktop-all
 ```
 
-The backend suite has 245 checks. Twenty-eight desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal, selected-session closure and terminal scrollback search. The search suite covers in-editor placement, match navigation, rich/comparison search, logs, values/settings editors, rendered pages and read-only content preservation. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
+The backend suite has 249 checks. Twenty-eight desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal, selected-session closure and terminal scrollback search. The search suite covers in-editor placement, match navigation, rich/comparison search, logs, values/settings editors, rendered pages and read-only content preservation. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
 
 To test an existing package, set `EL_D90_APP_EXECUTABLE` to its executable path. Automated tests do not require real cluster credentials. Live node SSH, privileged debug and Helm mutations are not established by fixture tests.
 
@@ -241,7 +243,7 @@ The current local release uses an ad-hoc integrity signature, not a Developer ID
 
 A source review identified and remediated a low-severity historical CSV formula issue. Historical and table exports share formula-prefix neutralization while preserving finite numeric samples. Secret list responses expose only identity metadata, type and key names; full Secret YAML requires confirmation. These controls are not a universal guarantee that Helm manifests, release values, logs or operator-entered content contain no sensitive data.
 
-A dependency advisory check on 2026-10-29 returned no published npm advisories. This is a point-in-time result, not a guarantee against unknown vulnerabilities. Report security concerns through the repository’s private security reporting channel when available; do not publish credentials or cluster details.
+The 0.5.10 dependency fix resolves the seven previously reported package entries; npm audit now returns zero advisories, and the shipped editor is rebuilt with DOMPurify 3.4.17. See [the current review](docs/qa-review-2026-11-09.md) for scope and release follow-up. Report security concerns through the repository’s private security reporting channel when available; do not publish credentials or cluster details.
 
 See [PROVENANCE.md](PROVENANCE.md) for the bounded source/asset comparison and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency licenses. Local reverse-engineering evidence, live environment records, dependencies, compiled helpers and release outputs are excluded from Git.
 
@@ -257,7 +259,7 @@ Download official builds from [this repository’s Releases](https://github.com/
 
 ## Automated releases
 
-Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.9` for version `0.5.9`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.10` for version `0.5.10`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
 
 After committing your next changes:
 
@@ -268,3 +270,11 @@ git push origin main --follow-tags
 ```
 
 The workflow uses GitHub’s temporary `GITHUB_TOKEN`; no personal access token or Apple certificate secret is required for ad-hoc builds. `contents: write` is limited to the publishing job; the build job has provenance permissions. The separate **Run workflow** button builds, tests and retains a downloadable Actions artifact without publishing a release or creating a new version tag. It can be used to validate changes to the pipeline.
+
+## Windows x64
+
+Download the [Windows portable ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.10/el-d90-0.5.10-windows-x64.zip), extract all files into a folder you own, then open **el-d90.exe**. Windows 10 1809+ or Windows 11 on Intel/AMD x64 is required. This build is not Authenticode signed; managed PCs may require administrator approval.
+
+Install **kubectl.exe**, and **AWS CLI v2** / **Helm** when needed, on PATH and restart el-d90. Cluster terminals use PowerShell and preserve the selected context through a private metadata-only kubeconfig overlay. Pod shells still run inside the container.
+
+Use PowerShell `Get-FileHash .\el-d90-0.5.10-windows-x64.zip -Algorithm SHA256` and compare it with the matching `.sha256` release asset.

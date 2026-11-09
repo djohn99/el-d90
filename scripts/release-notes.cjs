@@ -29,6 +29,16 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
+## Install on Windows x64
+
+1. Download **el-d90-${version}-windows-x64.zip**.
+2. Extract the complete ZIP into a folder you own, then open **el-d90.exe**. Do not run it inside the ZIP.
+3. Install kubectl.exe, and AWS CLI v2 / Helm when needed, on PATH. Restart el-d90 after changing PATH.
+
+Requires Windows 10 1809+ or Windows 11 on Intel/AMD x64. Windows terminals use native ConPTY; the cluster terminal opens PowerShell. Pod and Linux-node shells still use their container shell. This portable build is not Authenticode signed. A managed PC may require administrator approval; no SmartScreen or security policy is disabled.
+
+Verify its SHA-256 in PowerShell using \`Get-FileHash .\\el-d90-${version}-windows-x64.zip -Algorithm SHA256\` and compare with the matching .sha256 file.
+
 ## Verify the download
 
 Download the matching checksum file beside the DMG, then run:

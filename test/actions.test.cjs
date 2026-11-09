@@ -27,6 +27,7 @@ test('single-object deletion pins the context and namespace and never selects a 
   assert.equal(operation.args.includes('--all'), false);
   assert.equal(operation.args.includes('--all-namespaces'), false);
   assert.equal(operation.confirmation.highRisk, false);
+  assert.equal(actions.validate({...base,resource:'deployments',action:'delete'}).confirmation.typedName,null);
 });
 
 test('ambiguous namespaces, collection-shaped names and unsupported actions fail before spawning', () => {
@@ -47,16 +48,17 @@ test('a selected object keeps its exact namespace even under a multi-namespace w
   assert.equal(operation.args[operation.args.indexOf('--namespace') + 1], 'team-a');
 });
 
-test('namespace, node, volume, secret and CRD deletions carry typed-name confirmation metadata', () => {
+test('namespace, node, volume, secret and CRD deletions use native confirmation without name typing', () => {
   for (const resource of ['namespaces', 'nodes', 'persistentvolumes', 'persistentvolumeclaims', 'secrets', 'customresourcedefinitions']) {
     const operation = actions.validate({ ...base, resource, action: 'delete' });
     assert.equal(operation.confirmation.highRisk, true);
-    assert.equal(operation.confirmation.typedName, 'web-123');
+    assert.equal(operation.confirmation.typedName, null);
   }
 });
 
 test('drain respects eviction safeguards and does not force-delete local or unmanaged pod data', () => {
   const operation = actions.validate({ ...base, resource: 'nodes', action: 'drain' });
+  assert.equal(operation.confirmation.typedName,base.name);
   for (const arg of ['--ignore-daemonsets=true', '--delete-emptydir-data=false', '--force=false', '--disable-eviction=false', '--timeout=5m']) assert.ok(operation.args.includes(arg));
   assert.equal(operation.args.includes('--namespace'), false);
   assert.equal(operation.confirmation.highRisk, true);

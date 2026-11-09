@@ -1,4 +1,4 @@
-name: Apple Silicon DMG release
+name: macOS and Windows release
 
 on:
   push:
@@ -45,6 +45,8 @@ jobs:
         run: |
           npm ci
           python -m pip install -r scripts/requirements-dmg.txt
+      - name: Dependency advisory gate
+        run: npm audit --audit-level=low
       - name: Backend checks
         run: npm test
       - name: Package and ad-hoc sign
@@ -95,10 +97,71 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+  windows:
+    name: Build and verify Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate runner and version
+        id: version
+        run: node scripts/release-metadata.cjs
+      - name: Install locked dependencies and build Windows app
+        run: |
+          npm ci
+          npm audit --audit-level=low
+          npm run package:windows
+      - name: Install verified test kubectl
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'kubectl'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $exe = Join-Path $dir 'kubectl.exe'
+          $url = 'https://dl.k8s.io/release/v1.36.1/bin/windows/amd64/kubectl.exe'
+          Invoke-WebRequest $url -OutFile $exe
+          $expected = (Invoke-RestMethod "$url.sha256").Trim()
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'kubectl checksum mismatch' }
+          $dir >> $env:GITHUB_PATH
+      - name: Native Windows acceptance
+        run: node test/windows-smoke.cjs
+      - name: Create portable ZIP and checksum
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          New-Item -ItemType Directory -Force dist/installers | Out-Null
+          $name = "el-d90-$env:VERSION-windows-x64.zip"
+          $target = Join-Path 'dist/installers' $name
+          Compress-Archive -Path dist/el-d90-win32-x64/* -DestinationPath $target
+          $hash = (Get-FileHash $target -Algorithm SHA256).Hash.ToLower()
+          [IO.File]::WriteAllText("$target.sha256", "$hash  $name`n", [Text.Encoding]::ASCII)
+      - name: Record Windows build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: dist/installers/*.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ${{ steps.version.outputs.artifact }}
+          path: dist/installers/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
   publish:
     name: Publish GitHub release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -107,6 +170,10 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.build.outputs.artifact }}
+          path: release-files
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: el-d90-${{ needs.build.outputs.version }}-windows-x64
           path: release-files
       - name: Publish installer and checksum
         env:
@@ -120,6 +187,7 @@ jobs:
           set -euo pipefail
           cd release-files
           shasum -a 256 -c "el-d90-${VERSION}-mac-arm64.dmg.sha256"
+          shasum -a 256 -c "el-d90-${VERSION}-windows-x64.zip.sha256"
           if gh release view "$TAG" --json isDraft > existing-release.json 2>/dev/null; then
             if ! jq -e '.isDraft == true' existing-release.json >/dev/null; then
               echo 'This tag already has a published release; refusing to replace its assets.' >&2
@@ -128,7 +196,7 @@ jobs:
           else
             gh release create "$TAG" --verify-tag --draft --title "el-d90 ${VERSION}" --notes-file RELEASE_NOTES.md
           fi
-          gh release upload "$TAG" "el-d90-${VERSION}-mac-arm64.dmg" "el-d90-${VERSION}-mac-arm64.dmg.sha256" --clobber
+          gh release upload "$TAG" "el-d90-${VERSION}-mac-arm64.dmg" "el-d90-${VERSION}-mac-arm64.dmg.sha256" "el-d90-${VERSION}-windows-x64.zip" "el-d90-${VERSION}-windows-x64.zip.sha256" --clobber
           if [ "$PRERELEASE" = true ]; then
             gh release edit "$TAG" --draft=false --prerelease --latest=false
           else

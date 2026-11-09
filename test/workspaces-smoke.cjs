@@ -100,15 +100,16 @@ async function text(page, selector, value) { await page.locator(selector).filter
     await sidebarView(page,'pods');
     await page.getByRole('button', { name: 'Open pod-a', exact: true }).click();
     await page.locator('[data-tab="logs"]').click(); await text(page, '#logs-output', 'LOG_CONNECTED fixture-a');
-    await page.locator('[data-tab="terminal"]').click(); await page.locator('#connect-terminal').click();
+    await page.locator('[data-tab="terminal"]').click();
     await waitFor(() => calls().some(c => c.context === 'fixture-a' && c.args[0] === 'exec'));
+    await page.locator('[data-tab=summary]').click();await page.locator('[data-tab=terminal]').click();await page.waitForTimeout(80);assert.equal(calls().filter(c=>c.context==='fixture-a'&&c.args[0]==='exec').length,1,'Returning to Terminal reuses the active session');
     const aPids = calls().filter(c => c.context === 'fixture-a' && ['logs', 'exec'].includes(c.args[0])).map(c => c.pid);
     await selectContext(page, 'fixture-b');
     assert.ok(aPids.every(alive), 'Switching context must keep cluster A sessions alive');
     await sidebarView(page,'pods');
     await page.getByRole('button', { name: 'Open pod-b', exact: true }).click();
     await page.locator('[data-tab="logs"]').click(); await text(page, '#logs-output', 'LOG_CONNECTED fixture-b');
-    await page.locator('[data-tab="terminal"]').click(); await page.locator('#connect-terminal').click();
+    await page.locator('[data-tab="terminal"]').click();
     await waitFor(() => calls().some(c => c.context === 'fixture-b' && c.args[0] === 'exec'));
     const bPids = calls().filter(c => c.context === 'fixture-b' && ['logs', 'exec'].includes(c.args[0])).map(c => c.pid);
     assert.ok(aPids.every(alive) && bPids.every(alive));
@@ -135,6 +136,7 @@ async function text(page, selector, value) { await page.locator(selector).filter
     assert.equal(await page.locator('#context').inputValue(), 'fixture-b');
     assert.match(await page.locator('#page-title').textContent(), /Deployments/);
     assert.equal(await page.locator('#resource-table').textContent().then(t => t.includes('pod-a')), false);
+    await page.evaluate(()=>{const previous=state.view;state.view='connections';saveWorkspacePreferences();state.view=previous;});assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('el-d90-workspaces-v1')).workspaces.find(w=>w.context===state.context).view),'overview');await page.evaluate(()=>saveWorkspacePreferences());
     fs.unlinkSync(delayMarker);
     await application.close(); application = null;
     const restartOffset=calls().length;

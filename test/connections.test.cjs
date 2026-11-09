@@ -6,3 +6,11 @@ test('connection test pins exact context/namespace, reads one Pod and never perf
 test('connection diagnostics distinguish API reachability from authorization and redact provider errors',async()=>{let calls=0;const r=await connections.test({context:'team'},{contexts:async()=>({contexts:[{name:'team'}]}),run:async()=>{if(++calls===1)return'{"gitVersion":"v1"}';throw Error('Forbidden Bearer NEVER_RETURN');}});assert.equal(r.apiReachable,true);assert.equal(r.canListPods,false);assert.equal(r.code,'forbidden');assert.ok(!JSON.stringify(r).includes('NEVER_RETURN'));assert.equal(connections.hint(Error('bad CPU type')).code,'architecture');assert.equal(connections.hint(Error('exec: not found')).code,'missing-provider');assert.equal(connections.hint(Error('Unauthorized TOKEN_NEVER_RETURN')).code,'authentication');});
 
 test('first-run onboarding keeps import and tool diagnostics available when kubectl/config is missing',async()=>{const r=await connections.overview({run:()=>{throw Error('missing provider SECRET_NEVER_RETURN');},dependencies:async()=>({tools:[{name:'kubectl',available:false}]})});assert.deepEqual(r.contexts,[]);assert.equal(r.dependencies.tools[0].available,false);assert.ok(r.warning.includes('Import'));assert.ok(!JSON.stringify(r).includes('SECRET_NEVER_RETURN'));});
+
+test('namespace choices check access and do not assume default or expose denied namespaces',async()=>{
+ const calls=[];const result=await require('../src/connections.cjs').namespaces({context:'team',candidates:['known','denied']},{overview:async()=>({contexts:[{name:'team',namespace:'configured'}]}),list:async()=>{throw Error('403 Forbidden');},test:async input=>{calls.push(input.namespace);return{canListPods:input.namespace!=='denied'};}});
+ assert.deepEqual(result.namespaces,['configured','known']);assert.equal(result.restricted,true);assert.ok(!calls.includes('default'));
+});
+test('namespace discovery filters namespace-list results by actual role access',async()=>{
+ const result=await require('../src/connections.cjs').namespaces({context:'team'},{overview:async()=>({contexts:[{name:'team'}]}),list:async()=>({items:[{metadata:{name:'staging'}},{metadata:{name:'production'}}]}),test:async input=>({canListPods:input.namespace==='staging'})});assert.deepEqual(result.namespaces,['staging']);
+});

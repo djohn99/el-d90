@@ -4,8 +4,9 @@ const kube=require('./kube.cjs');
 const quote=value=>"'"+String(value).replace(/'/g,"'\\''")+"'";
 async function prepare(input,options={}){
  const context=kube.string(input.context,'context'),env={...(options.env||kube.environment())};
- const shell=input.shell||(['zsh','bash','sh'].includes(path.basename(env.SHELL||''))?env.SHELL:'/bin/zsh');
- if(!['/bin/zsh','/bin/bash','/bin/sh'].includes(shell))throw Error('Choose /bin/zsh, /bin/bash or /bin/sh');
+ const windows=process.platform==='win32';
+ const shell=input.shell||(windows?path.join(env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe'):(['zsh','bash','sh'].includes(path.basename(env.SHELL||''))?env.SHELL:'/bin/zsh'));
+ if(!windows&&!['/bin/zsh','/bin/bash','/bin/sh'].includes(shell))throw Error('Choose /bin/zsh, /bin/bash or /bin/sh');
  const cwd=input.cwd||os.homedir();if(typeof cwd!=='string'||!path.isAbsolute(cwd)||/[\x00-\x1f]/.test(cwd))throw Error('Working directory must be an absolute local directory');if(!(await fs.stat(cwd)).isDirectory())throw Error('Working directory is not a directory');
  const config=JSON.parse(await (options.run||kube.run)(['config','view','-o','json']));
  const selected=config.contexts?.find(c=>c.name===context)?.context;if(!selected?.cluster)throw Error('Selected context is not available in kubeconfig');
@@ -20,6 +21,12 @@ async function prepare(input,options={}){
   const sources=(env.KUBECONFIG?env.KUBECONFIG.split(path.delimiter):[path.join(os.homedir(),'.kube/config')]).filter(Boolean).map(file=>path.resolve(file));
   env.KUBECONFIG=[overlay,...new Set(sources)].join(path.delimiter);env.EL_D90_CONTEXT=context;env.EL_D90_NAMESPACE=namespace;
   delete env.HELM_KUBECONTEXT;delete env.HELM_NAMESPACE;
+  if(windows){
+   const allowed=path.join(env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');if(shell.toLowerCase()!==allowed.toLowerCase())throw Error('Use the Windows PowerShell executable');
+   const ps=value=>"'"+String(value).replace(/'/g,"''")+"'";
+   const startup="[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); Set-Alias kubectl "+ps(options.kubectl||kube.executable())+"; "+(()=>{try{return 'Set-Alias helm '+ps(options.helm||kube.findHelm())+'; ';}catch{return '';}})()+"Write-Host "+ps('el-d90 local shell · initial context: '+context)+"; Write-Host "+ps('Namespace: '+namespace)+"; if(Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue){Set-PSReadLineOption -HistorySaveStyle SaveNothing}";
+   return{command:shell,args:['-NoLogo','-NoProfile','-NoExit','-Command',startup],env,cwd,context,namespace,directory,overlay,cleanup};
+  }
   const bin=path.join(directory,'bin');await fs.mkdir(bin,{mode:0o700});await fs.symlink(options.kubectl||kube.executable(),path.join(bin,'kubectl'));
   try{await fs.symlink(options.helm||kube.findHelm(),path.join(bin,'helm'));}catch{}
   env.PATH=bin+path.delimiter+env.PATH;
