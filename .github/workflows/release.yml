@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || !inputs.test_windows
     name: Build and verify Apple Silicon DMG
     runs-on: macos-15
     timeout-minutes: 35
@@ -140,6 +141,8 @@ jobs:
           if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'kubectl checksum mismatch' }
           $dir >> $env:GITHUB_PATH
       - name: Native Windows acceptance
+        env:
+          DEBUG: pw:browser*
         run: node test/windows-smoke.cjs
       - name: Create portable ZIP and checksum
         shell: pwsh
