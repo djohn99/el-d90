@@ -3,7 +3,7 @@
 ## [0.5.10] - 2026-11-10
 
 - Resolve the seven dependency-advisory package entries, rebuild Monaco from ESM with the patched DOMPurify3.4.17, and gate releases on zero npm advisories.
-- Add a native Windows x64 portable build with ConPTY terminals and its own acceptance checks.
+- Add experimental Windows build infrastructure; defer Windows publication pending native acceptance. Release 0.5.10 ships the Apple Silicon DMG only.
 
 - Clear prior-role namespace search state and retain unsaved ConfigMap data drafts across detail dismissal in memory.
 

@@ -273,8 +273,4 @@ The workflow uses GitHub’s temporary `GITHUB_TOKEN`; no personal access token 
 
 ## Windows x64
 
-Download the [Windows portable ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.10/el-d90-0.5.10-windows-x64.zip), extract all files into a folder you own, then open **el-d90.exe**. Windows 10 1809+ or Windows 11 on Intel/AMD x64 is required. This build is not Authenticode signed; managed PCs may require administrator approval.
-
-Install **kubectl.exe**, and **AWS CLI v2** / **Helm** when needed, on PATH and restart el-d90. Cluster terminals use PowerShell and preserve the selected context through a private metadata-only kubeconfig overlay. Pod shells still run inside the container.
-
-Use PowerShell `Get-FileHash .\el-d90-0.5.10-windows-x64.zip -Algorithm SHA256` and compare it with the matching `.sha256` release asset.
+Windows support is in development. Version 0.5.10 publishes only the Apple Silicon DMG; a Windows download will follow after native acceptance tests pass.
