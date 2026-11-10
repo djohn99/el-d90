@@ -7,7 +7,7 @@ const watchdog=setTimeout(()=>{console.error('Windows acceptance exceeded 150 se
  const app=await _electron.launch({executablePath:path.join(root,'dist/el-d90-win32-x64/el-d90.exe'),args:['--demo'],env:launchEnvironment});
  try{
   const result=await app.evaluate(async({app},temporary)=>{
-   const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');const {spawnWindowsTerminal}=require(path.join(app.getAppPath(),'src/windows-pty.cjs'));
+   const require=process.mainModule.require.bind(process.mainModule);const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');const {spawnWindowsTerminal}=require(path.join(app.getAppPath(),'src/windows-pty.cjs'));
    const powershell=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe');
    const wait=async(check,getOutput)=>{const deadline=Date.now()+20000;while(!check()){if(Date.now()>deadline)throw Error('Native terminal timeout: '+getOutput());await new Promise(r=>setTimeout(r,50));}};
    async function exercise(command,args,prompt,commands){const child=spawnWindowsTerminal(command,args),pid=child.pid;let output='';child.stdout.on('data',chunk=>output+=chunk);child.stderr.on('data',chunk=>output+=chunk);child.stdin.on('error',()=>{});const clean=()=>output.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,'');let ended=false,code;const closed=new Promise(resolve=>child.once('close',value=>{ended=true;code=value;resolve();}));try{
