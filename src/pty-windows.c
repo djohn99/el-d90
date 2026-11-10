@@ -11,9 +11,9 @@ static HPCON console;
 static HANDLE inputWrite, outputRead;
 // Node supplies overlapped pipe handles on Windows. Complete pending I/O
 // explicitly; the same helper also accepts synchronous ConPTY pipe handles.
-static BOOL pipeRead(HANDLE h,void *b,DWORD size,DWORD *n){OVERLAPPED o={0};o.hEvent=CreateEventW(NULL,TRUE,FALSE,NULL);BOOL ok=ReadFile(h,b,size,n,&o);if(!ok&&GetLastError()==ERROR_IO_PENDING)ok=GetOverlappedResult(h,&o,n,TRUE);CloseHandle(o.hEvent);return ok;}
+static BOOL pipeRead(HANDLE h,void *b,DWORD size,DWORD *n){OVERLAPPED o={0};o.hEvent=CreateEventW(NULL,TRUE,FALSE,NULL);BOOL ok=ReadFile(h,b,size,n,&o);if(!ok&&GetLastError()==ERROR_IO_PENDING)ok=GetOverlappedResult(h,&o,n,TRUE);if(!ok)fprintf(stderr,"Terminal pipe read failed: %lu\n",GetLastError());CloseHandle(o.hEvent);return ok;}
 static BOOL pipeWrite(HANDLE h,const void *b,DWORD size,DWORD *n){OVERLAPPED o={0};o.hEvent=CreateEventW(NULL,TRUE,FALSE,NULL);BOOL ok=WriteFile(h,b,size,n,&o);if(!ok&&GetLastError()==ERROR_IO_PENDING)ok=GetOverlappedResult(h,&o,n,TRUE);CloseHandle(o.hEvent);return ok;}
-static DWORD WINAPI inputPump(void *unused){char b[16384];DWORD n,w;(void)unused;while(pipeRead(GetStdHandle(STD_INPUT_HANDLE),b,sizeof b,&n)&&n){DWORD p=0;while(p<n){if(!WriteFile(inputWrite,b+p,n-p,&w,NULL))return 0;p+=w;}}return 0;}
+static DWORD WINAPI inputPump(void *unused){char b[16384];DWORD n,w;(void)unused;while(pipeRead(GetStdHandle(STD_INPUT_HANDLE),b,sizeof b,&n)&&n){DWORD p=0;while(p<n){if(!WriteFile(inputWrite,b+p,n-p,&w,NULL)){fprintf(stderr,"Terminal input write failed: %lu\n",GetLastError());return 0;}p+=w;}}return 0;}
 static DWORD WINAPI outputPump(void *unused){char b[16384];DWORD n,w;(void)unused;while(ReadFile(outputRead,b,sizeof b,&n,NULL)&&n){DWORD p=0;while(p<n){if(!pipeWrite(GetStdHandle(STD_OUTPUT_HANDLE),b+p,n-p,&w))return 0;p+=w;}}return 0;}
 static DWORD WINAPI resizePump(void *unused){char b[128];int used=0;DWORD n;char c;(void)unused;while(pipeRead((HANDLE)_get_osfhandle(3),&c,1,&n)&&n==1){if(c=='\n'){int cols,rows;b[used]=0;if(sscanf_s(b,"%d %d",&cols,&rows)==2&&cols>=20&&cols<=400&&rows>=5&&rows<=200){COORD size={(SHORT)cols,(SHORT)rows};ResizePseudoConsole(console,size);}used=0;}else if(used<127)b[used++]=c;else used=0;}return 0;}
 // Quote according to CommandLineToArgvW/MSVC rules, with no shell interpolation.
