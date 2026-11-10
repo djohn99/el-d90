@@ -24,7 +24,7 @@ async function prepare(input,options={}){
   if(windows){
    const allowed=path.join(env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');if(shell.toLowerCase()!==allowed.toLowerCase())throw Error('Use the Windows PowerShell executable');
    const ps=value=>"'"+String(value).replace(/'/g,"''")+"'";
-   const startup="function global:PSConsoleHostReadLine { [Console]::ReadLine() }; Remove-Module PSReadLine -ErrorAction SilentlyContinue; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); Set-Alias kubectl "+ps(options.kubectl||kube.executable())+"; "+(()=>{try{return 'Set-Alias helm '+ps(options.helm||kube.findHelm())+'; ';}catch{return '';}})()+"Write-Host "+ps('el-d90 local shell · initial context: '+context)+"; Write-Host "+ps('Namespace: '+namespace)+"; if(Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue){Set-PSReadLineOption -HistorySaveStyle SaveNothing}";
+   const startup="Remove-Module PSReadLine -ErrorAction SilentlyContinue; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); Set-Alias kubectl "+ps(options.kubectl||kube.executable())+"; "+(()=>{try{return 'Set-Alias helm '+ps(options.helm||kube.findHelm())+'; ';}catch{return '';}})()+"Write-Host "+ps('el-d90 local shell · initial context: '+context)+"; Write-Host "+ps('Namespace: '+namespace)+"; if(Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue){Set-PSReadLineOption -HistorySaveStyle SaveNothing}";
    return{command:shell,args:['-NoLogo','-NoProfile','-NoExit','-Command',startup],env,cwd,context,namespace,directory,overlay,cleanup};
   }
   const bin=path.join(directory,'bin');await fs.mkdir(bin,{mode:0o700});await fs.symlink(options.kubectl||kube.executable(),path.join(bin,'kubectl'));
