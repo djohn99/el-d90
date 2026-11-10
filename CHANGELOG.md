@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.13] - 2026-11-10
+
+- Remove demo workspace buttons from packaged macOS and Windows apps while retaining local development demos.
+- Reject normal packaged demo startup; retain explicitly isolated acceptance-test fixtures.
+- Check demo-control visibility in packaged desktop and Windows acceptance tests.
+
 ## [0.5.12] - 2026-11-10
 
 - Publish public Apple Silicon DMG and Windows x64 portable ZIP downloads, each with checksums and build provenance. No GitHub sign-in is needed.
