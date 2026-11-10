@@ -1,6 +1,6 @@
 # el-d90 current coverage and release-readiness matrix
 
-Reviewed 2026-11-10 for the 0.5.11 candidate, including the changes after 0.5.10. This is an implementation/acceptance inventory, not a claim of complete parity with current Lens or Freelens. The original 0.5.0 comparison remains in the local research archive, which is excluded from distribution.
+Reviewed 2026-11-10 for the 0.5.12 candidate, including the Windows build fix. This is an implementation/acceptance inventory, not a claim of complete parity with current Lens or Freelens. The original 0.5.0 comparison remains in the local research archive, which is excluded from distribution.
 
 ## Covered in automated desktop acceptance
 
@@ -19,14 +19,14 @@ Reviewed 2026-11-10 for the 0.5.11 candidate, including the changes after 0.5.10
 | Map, Projects and GitOps | Bounded topology map, multi-context Projects, read-only Argo/Flux information | Declared relationships do not prove live traffic. GitOps reconcile/sync mutations are not implemented. |
 | Extensions | Declarative reviewed manifests, resource pages/details/columns/relations | Arbitrary third-party executable plugin compatibility is intentionally not provided. |
 | Node access | Kubernetes shell/debug and advanced SSH workflow | Live privileged debug was declined; successful real SSH/debug sessions are not certified by offline fixtures. |
-| Packaging | Apple Silicon DMG and tagged GitHub Actions releases with checksums | Developer ID signing/notarization is still unavailable. Manual installation/update and macOS approval remain necessary. |
+| Packaging | Apple Silicon DMG and Windows x64 portable ZIP; tagged GitHub Actions releases with checksums and build provenance | Developer ID signing/notarization and Windows Authenticode signing are unavailable. Manual installation/update and platform approval may remain necessary. |
 | AI | Disabled by the user's decision | Remains deferred. |
 
 ## Before the next release
 
 1. Completed for 0.5.10: rebuilt the rich-editor browser assets with DOMPurify 3.4.17 and resolved the dependency advisory entries. Keep the audit and asset-provenance tests in CI.
-2. The final 250 backend checks and 28 packaged desktop suites passed; preserve the distinction between automated fixture results and live acceptance.
+2. The final 251 backend checks and 28 packaged desktop suites passed; preserve the distinction between automated fixture results and live acceptance.
 3. Verify the new AWS namespace and ConfigMap workflows on the other Mac, including its company proxy/CA environment.
-4. Publish a new version only after release authorization. The release workflow publishes the Apple Silicon DMG after macOS acceptance passes. Windows publication remains deferred.
+4. Publish a new version only after release authorization. The release workflow publishes the Apple Silicon DMG and Windows x64 ZIP only after both native build jobs pass.
 
 See [the dated review](qa-review-2026-11-09.md) for test results, confirmed fixes and dependency findings.

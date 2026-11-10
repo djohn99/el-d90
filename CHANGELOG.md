@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.12] - 2026-11-10
+
+- Publish public Apple Silicon DMG and Windows x64 portable ZIP downloads, each with checksums and build provenance. No GitHub sign-in is needed.
+- Use maintained node-pty/ConPTY support for Windows terminals and share native resize routing across resource terminals and saved sessions.
+- Test Windows keyboard input, resizing, Unicode, exit, private cluster context and packaged YAML editing before publishing. Gate publication on successful native builds for both platforms.
+
 ## [0.5.11] - 2026-11-10
 
 - Restore visible AWS connection settings with automatic Terminal settings and independent manual overrides.
