@@ -1,6 +1,7 @@
 // Native Windows acceptance: ConPTY I/O/resize/cleanup, packaged UI, local
 // cluster shell context overlay, actual kubectl.exe discovery. No live cluster.
 const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawn}=require('node:child_process'),{_electron}=require('playwright');
+const watchdog=setTimeout(()=>{console.error('Windows acceptance exceeded 120 seconds');process.exit(1);},120000);
 (async()=>{
  assert.equal(process.platform,'win32');const root=path.resolve(__dirname,'..'),helper=path.join(root,'dist/el-d90-win32-x64/resources/app.asar.unpacked/assets/el-d90-pty.exe'),temporary=fs.mkdtempSync(path.join(os.tmpdir(),'eld90-win-'));
  const powershell=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe');
@@ -14,5 +15,5 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('nod
  // Use real kubectl for config metadata only; no network requests are made.
  const config=path.join(temporary,'config.json');fs.writeFileSync(config,JSON.stringify({apiVersion:'v1',kind:'Config',contexts:[{name:'windows-fixture',context:{cluster:'offline',namespace:'team'}}],clusters:[{name:'offline',cluster:{server:'https://127.0.0.1:9'}}],users:[]}));process.env.KUBECONFIG=config;
  const prepared=await require('../src/cluster-terminal.cjs').prepare({context:'windows-fixture'},{base:path.join(temporary,'sessions')});assert.equal(prepared.namespace,'team');assert.equal(prepared.command.toLowerCase(),powershell.toLowerCase());assert.equal(JSON.parse(fs.readFileSync(prepared.overlay)).contexts[0].context.namespace,'team');await prepared.cleanup();
- console.log('PASS Windows x64: ConPTY keyboard/resize/exit, kubectl discovery, context overlay and packaged editor/UI');
-})().catch(error=>{console.error(error);process.exitCode=1;});
+ clearTimeout(watchdog);console.log('PASS Windows x64: ConPTY keyboard/resize/exit, kubectl discovery, context overlay and packaged editor/UI');
+})().catch(error=>{console.error(error);process.exit(1);});
