@@ -1,10 +1,10 @@
 # Windows x64 build
 
-Download the [Windows x64 ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.12/el-d90-0.5.12-windows-x64.zip) from the [0.5.12 release](https://github.com/djohn99/el-d90/releases/tag/v0.5.12). No GitHub sign-in is required. Extract the entire ZIP before opening `el-d90.exe`.
+Download the [Windows x64 ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.13/el-d90-0.5.13-windows-x64.zip) from the [0.5.13 release](https://github.com/djohn99/el-d90/releases/tag/v0.5.13). No GitHub sign-in is required. Extract the entire ZIP before opening `el-d90.exe`.
 
 Requires Windows 10 1809+ or Windows 11 on Intel/AMD x64. Install kubectl.exe, AWS CLI v2 and Helm as needed on PATH. Restart the app after changing PATH. The app is not Authenticode signed; managed PCs may require administrator approval.
 
-Compare `Get-FileHash .\el-d90-0.5.12-windows-x64.zip -Algorithm SHA256` with the matching `.sha256` file.
+Compare `Get-FileHash .\el-d90-0.5.13-windows-x64.zip -Algorithm SHA256` with the matching `.sha256` file.
 
 ## Native validation
 

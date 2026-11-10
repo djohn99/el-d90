@@ -12,7 +12,7 @@ function draftKey(object=state.selected,kind=state.selectedKind){return JSON.str
 function keepDismissedDraft(){if(!$('drawer').classList.contains('hidden')&&(state.selected||state.isCreating)){if($('yaml-editor').value===(state.originalYaml||'')){dismissedDrafts.delete(draftKey());return;}dismissedDrafts.set(draftKey(),{yaml:$('yaml-editor').value,original:state.originalYaml||''});}}
 let workspaceIntent=0;
 let requestEpoch = 0, detailEpoch = 0;let sessionUI,workspaceUI,detailLogViewer,lastResourceView=null,searchTimer=null;
-let state = { demo: false, forcedDemo: false, context: '', namespace: '*', view: 'overview', items: [], selected: null, selectedKind: '', tab: 'summary', generation: 0, detailGeneration: 0, streamGeneration: 0, logs: null, terminal: null, terminalInstance: null, loading: false, contexts: [], catalogue: [], dynamicResource: '', namespaceError: '', namespacesKnown: false, discoveryError: '', namespaces: [], namespaceNames: [], logText: '', historySettings: {}, initialized: false };
+let state = { demo: false, forcedDemo: false, demoAvailable: false, context: '', namespace: '*', view: 'overview', items: [], selected: null, selectedKind: '', tab: 'summary', generation: 0, detailGeneration: 0, streamGeneration: 0, logs: null, terminal: null, terminalInstance: null, loading: false, contexts: [], catalogue: [], dynamicResource: '', namespaceError: '', namespacesKnown: false, discoveryError: '', namespaces: [], namespaceNames: [], logText: '', historySettings: {}, initialized: false };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const hidden = (id, hide) => $(id).classList.toggle('hidden', hide);
 function notice(text = '', info = false) { $('notice').textContent = text; $('notice').classList.toggle('info', info); hidden('notice', !text); }
@@ -310,6 +310,7 @@ async function createResource(restoring = false) {
   $('yaml-editor').value = restoring ? state.yamlDraft || '' : `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: example-config\n  namespace: ${$('create-namespace').value || 'default'}\ndata:\n  greeting: hello\n`; $('yaml-result').textContent = ''; state.originalYaml='';editorTools?.clear();const dismissed=dismissedDrafts.get(draftKey());if(!restoring&&dismissed){$('yaml-editor').value=dismissed.yaml;state.originalYaml=dismissed.original;}hidden('drawer', false); await tab('yaml');workspaceUI?.applyReadOnly();richEditor?.sync();resourceForms?.sync();
 }
 async function toggleDemo() {
+  if(!state.demoAvailable)return notice('Demo workspaces are available only in development.',true);
   if(state.forcedDemo)return notice('This preview was launched in demo mode. Open el-d90 normally to use real contexts.',true);
   storeWorkspaceUI();if(state.context)clusterWorkspaces.set(workspaceKey(state.context),state);const demo=!state.demo;state=freshWorkspace('',demo);state.generation=++requestEpoch;paintWorkspace();
   $('mode-badge').textContent=demo?'DEMO':'LOCAL';$('workspace-mode').textContent=demo?'Sample workspace':'Kubernetes workspace';$('demo-toggle').textContent=demo?'Return to my contexts ↗':'Explore demo workspace ↗';
@@ -355,7 +356,7 @@ window.eld90?.onStream(message => {
   if(message.id===owner.terminal){owner.terminalBuffer=((owner.terminalBuffer||'')+message.data).slice(-1000000);owner.terminalInstance?.write(message.data);if(message.ended)owner.terminal=null;}
 });
 
-(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version; if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadExtensions();await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
+(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); state.demoAvailable=info.demoAvailable===true; $('demo-toggle').hidden=!state.demoAvailable; $('welcome-demo').hidden=!state.demoAvailable; document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version; if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadExtensions();await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
 
 function activeResource() { return state.view === 'resources' ? state.dynamicResource : state.view; }
 async function discoverResources(context) {
@@ -500,7 +501,7 @@ const clusterWorkspaces = new Map();
 const workspaceTemplate = structuredClone(state);
 const workspaceKey = (context, demo=state.demo) => `${demo?'demo':'live'}:${context}`;
 function freshWorkspace(context, demo=state.demo) {
-  return {...structuredClone(workspaceTemplate),context,demo,forcedDemo:state.forcedDemo,contexts:state.contexts,namespaces:[],namespaceNames:[],historySettings:{},logText:'',generation:++requestEpoch,detailGeneration:++detailEpoch,streamGeneration:0};
+  return {...structuredClone(workspaceTemplate),context,demo,forcedDemo:state.forcedDemo,demoAvailable:state.demoAvailable,contexts:state.contexts,namespaces:[],namespaceNames:[],historySettings:{},logText:'',generation:++requestEpoch,detailGeneration:++detailEpoch,streamGeneration:0};
 }
 function shortContext(context) {return context.split('/').at(-1);}
 function storeWorkspaceUI(owner=state) {
