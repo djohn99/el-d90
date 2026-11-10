@@ -78,7 +78,8 @@ function startStream(args, type, event, context, options={}) {
   const helper = app.isPackaged ? path.join(process.resourcesPath,'app.asar.unpacked/assets',require('./platform.cjs').ptyName()) : path.join(__dirname,'../assets',require('./platform.cjs').ptyName());
   const command = type === 'terminal' ? helper : kube.executable();
   const argv = type === 'terminal' ? [options.command || kube.executable(), ...args] : args;
-  const child = spawn(command, argv, { shell: false, detached: true, env: { ...kube.environment(), TERM: 'xterm-256color', COLUMNS: '100', LINES: '28' }, stdio: type === 'terminal' ? require('./platform.cjs').ptyStdio() : ['pipe', 'pipe', 'pipe'] });
+  const childOptions={shell:false,detached:true,env:{...kube.environment(),TERM:'xterm-256color',COLUMNS:'100',LINES:'28'}};
+  const child=type==='terminal'?require('./platform.cjs').spawnTerminal(helper,options.command||kube.executable(),args,childOptions):spawn(command,argv,{...childOptions,stdio:['pipe','pipe','pipe']});
   streams.set(id, { child, type, context,cleanup:options.cleanup,metadata:options.metadata });
   function send(data, ended = false) { if (!event.sender.isDestroyed()) event.sender.send('stream:data', { id, type, data, ended, context }); }
   child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');

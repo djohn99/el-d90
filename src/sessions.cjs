@@ -9,7 +9,7 @@ class Sessions{
  _finish(e,message,state='ended'){if(e.closed)return e.finished;e.closed=true;e.state=state;this._send(e,message,true);e.finished=Promise.resolve().then(()=>e.cleanup?.()).catch(error=>{e.state='error';this._send(e,'\r\nSession cleanup failed: '+error.message+'\r\n',true);});return e.finished;}
  _spawn(e,command,args,options={}){
   if(e.closed)throw Error('Session was cancelled');
-  const child=(this.options.spawn||spawn)(this.options.helper,[command,...args],{shell:false,detached:true,cwd:options.cwd,env:{...(options.env||kube.environment()),TERM:'xterm-256color',COLUMNS:'100',LINES:'28'},stdio:require('./platform.cjs').ptyStdio()});e.child=child;e.state='running';
+  const child=require('./platform.cjs').spawnTerminal(this.options.helper,command,args,{shell:false,detached:true,cwd:options.cwd,env:{...(options.env||kube.environment()),TERM:'xterm-256color',COLUMNS:'100',LINES:'28'}},this.options.spawn||spawn);e.child=child;e.state='running';
   child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');for(const output of [child.stdout,child.stderr])output.on('data',data=>{if(!e.closed)this._send(e,data);});
   child.on('error',error=>this._finish(e,'\r\n'+error.message+'\r\n','error'));
   child.on('close',code=>this._finish(e,`\r\n[Session ended${code?', exit '+code:''}]\r\n`,code?'error':'ended'));
