@@ -141,6 +141,8 @@ jobs:
           if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'kubectl checksum mismatch' }
           $dir >> $env:GITHUB_PATH
       - name: Native Windows acceptance
+        env:
+          DEBUG: pw:browser*
         run: node test/windows-smoke.cjs
       - name: Create portable ZIP and checksum
         shell: pwsh

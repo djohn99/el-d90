@@ -3,7 +3,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('nod
 const watchdog=setTimeout(()=>{console.error('Windows acceptance exceeded 150 seconds');process.exit(1);},150000);
 (async()=>{
  assert.equal(process.platform,'win32');const root=path.resolve(__dirname,'..'),temporary=fs.mkdtempSync(path.join(os.tmpdir(),'eld90-win-'));
- const app=await _electron.launch({executablePath:path.join(root,'dist/el-d90-win32-x64/el-d90.exe'),args:['--demo'],env:{...process.env,EL_D90_USER_DATA:path.join(temporary,'profile'),ELECTRON_RUN_AS_NODE:''}});
+ const launchEnvironment={...process.env,EL_D90_USER_DATA:path.join(temporary,'profile')};delete launchEnvironment.ELECTRON_RUN_AS_NODE;
+ const app=await _electron.launch({executablePath:path.join(root,'dist/el-d90-win32-x64/el-d90.exe'),args:['--demo'],env:launchEnvironment});
  try{
   const result=await app.evaluate(async({app},temporary)=>{
    const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');const {spawnWindowsTerminal}=require(path.join(app.getAppPath(),'src/windows-pty.cjs'));
