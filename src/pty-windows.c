@@ -1,5 +1,5 @@
-// Original Windows 10/11 ConPTY bridge. Same stdin/stdout + fd3 resize protocol
-// as the macOS helper; all child processes belong to a kill-on-close Job.
+// Original Windows 10/11 ConPTY bridge. stdin/stdout carry terminal data;
+// framed stdin messages resize the console. Children belong to a kill-on-close Job.
 #define _WIN32_WINNT 0x0A00
 #include <windows.h>
 #include <stdio.h>
@@ -13,7 +13,7 @@ static HANDLE inputWrite, outputRead;
 // explicitly; the same helper also accepts synchronous ConPTY pipe handles.
 static BOOL pipeRead(HANDLE h,void *b,DWORD size,DWORD *n){OVERLAPPED o={0};o.hEvent=CreateEventW(NULL,TRUE,FALSE,NULL);BOOL ok=ReadFile(h,b,size,n,&o);if(!ok&&GetLastError()==ERROR_IO_PENDING)ok=GetOverlappedResult(h,&o,n,TRUE);if(!ok)fprintf(stderr,"Terminal pipe read failed: %lu\n",GetLastError());CloseHandle(o.hEvent);return ok;}
 static BOOL pipeWrite(HANDLE h,const void *b,DWORD size,DWORD *n){OVERLAPPED o={0};o.hEvent=CreateEventW(NULL,TRUE,FALSE,NULL);BOOL ok=WriteFile(h,b,size,n,&o);if(!ok&&GetLastError()==ERROR_IO_PENDING)ok=GetOverlappedResult(h,&o,n,TRUE);CloseHandle(o.hEvent);return ok;}
-static DWORD WINAPI inputPump(void *unused){char b[16384],control[96];DWORD n,w;int used=0;(void)unused;while(pipeRead(GetStdHandle(STD_INPUT_HANDLE),b,sizeof b,&n)&&n){for(DWORD i=0;i<n;i++){unsigned char c=(unsigned char)b[i];if(used||c==0x1e){control[used++]=(char)c;if(c=='\n'||used==95){control[used]=0;int cols,rows;if(sscanf_s(control,"\x1e" "ELD90:%d:%d",&cols,&rows)==2&&cols>=20&&cols<=400&&rows>=5&&rows<=200){COORD size={(SHORT)cols,(SHORT)rows};ResizePseudoConsole(console,size);}else WriteFile(inputWrite,control,(DWORD)used,&w,NULL);used=0;}}else if(!WriteFile(inputWrite,&b[i],1,&w,NULL))return 0;}}return 0;}
+static DWORD WINAPI inputPump(void *unused){char b[16384],control[96];DWORD n,w;int used=0;(void)unused;while(pipeRead(GetStdHandle(STD_INPUT_HANDLE),b,sizeof b,&n)&&n){if(GetEnvironmentVariableW(L"EL_D90_PTY_TRACE",NULL,0))fprintf(stderr,"PTY input bytes: %lu\n",n);for(DWORD i=0;i<n;i++){unsigned char c=(unsigned char)b[i];if(used||c==0x1e){control[used++]=(char)c;if(c=='\n'||used==95){control[used]=0;int cols,rows;if(sscanf_s(control,"\x1e" "ELD90:%d:%d",&cols,&rows)==2&&cols>=20&&cols<=400&&rows>=5&&rows<=200){COORD size={(SHORT)cols,(SHORT)rows};ResizePseudoConsole(console,size);}else WriteFile(inputWrite,control,(DWORD)used,&w,NULL);used=0;}}else if(!WriteFile(inputWrite,&b[i],1,&w,NULL))return 0;}}return 0;}
 static DWORD WINAPI outputPump(void *unused){char b[16384];DWORD n,w;(void)unused;while(ReadFile(outputRead,b,sizeof b,&n,NULL)&&n){DWORD p=0;while(p<n){if(!pipeWrite(GetStdHandle(STD_OUTPUT_HANDLE),b+p,n-p,&w))return 0;p+=w;}}return 0;}
 // Quote according to CommandLineToArgvW/MSVC rules, with no shell interpolation.
 static wchar_t *quote(wchar_t *out,const wchar_t *arg){*out++=L'"';while(*arg){unsigned slashes=0;while(*arg==L'\\'){slashes++;arg++;}if(*arg==L'"'){for(unsigned i=0;i<slashes*2+1;i++)*out++=L'\\';*out++=*arg++;}else if(!*arg){for(unsigned i=0;i<slashes*2;i++)*out++=L'\\';break;}else{for(unsigned i=0;i<slashes;i++)*out++=L'\\';*out++=*arg++;}}*out++=L'"';return out;}
