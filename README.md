@@ -55,7 +55,7 @@ Deployment inspection with combined replica logs:
 
 ## New in 0.5.11
 
-**0.5.11** fixes AWS SSO browser sign-in for official regional `signin.aws` approval pages, supports approval redirects across AWS regions, and clarifies the separate SSO and EKS region settings. See the [complete release notes](docs/releases/0.5.11.md).
+**0.5.11** restores visible AWS connection settings, combines automatic Terminal settings with independent manual overrides, and lets you refresh automatic settings without restarting. See the [complete release notes](docs/releases/0.5.11.md).
 
 Sidebar sections collapse and remember their state. Extra tools including Resource map, Metrics, Troubleshooting, Applications and Node sessions are available under **File → Workspace tools**. Custom Resources contains Definitions and searchable API groups directly.
 
@@ -216,7 +216,7 @@ npm test
 npm run test:desktop-all
 ```
 
-The backend suite has 249 checks. Twenty-eight desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal, selected-session closure and terminal scrollback search. The search suite covers in-editor placement, match navigation, rich/comparison search, logs, values/settings editors, rendered pages and read-only content preservation. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
+The backend suite has 250 checks. Twenty-eight desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal, selected-session closure and terminal scrollback search. The search suite covers in-editor placement, match navigation, rich/comparison search, logs, values/settings editors, rendered pages and read-only content preservation. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
 
 To test an existing package, set `EL_D90_APP_EXECUTABLE` to its executable path. Automated tests do not require real cluster credentials. Live node SSH, privileged debug and Helm mutations are not established by fixture tests.
 
@@ -243,7 +243,7 @@ The current local release uses an ad-hoc integrity signature, not a Developer ID
 
 A source review identified and remediated a low-severity historical CSV formula issue. Historical and table exports share formula-prefix neutralization while preserving finite numeric samples. Secret list responses expose only identity metadata, type and key names; full Secret YAML requires confirmation. These controls are not a universal guarantee that Helm manifests, release values, logs or operator-entered content contain no sensitive data.
 
-The 0.5.11 dependency fix resolves the seven previously reported package entries; npm audit now returns zero advisories, and the shipped editor is rebuilt with DOMPurify 3.4.17. See [the current review](docs/qa-review-2026-11-09.md) for scope and release follow-up. Report security concerns through the repository’s private security reporting channel when available; do not publish credentials or cluster details.
+The 0.5.10 dependency fix resolves the seven previously reported package entries; npm audit now returns zero advisories, and the shipped editor is rebuilt with DOMPurify 3.4.17. See [the current review](docs/qa-review-2026-11-09.md) for scope and release follow-up. Report security concerns through the repository’s private security reporting channel when available; do not publish credentials or cluster details.
 
 See [PROVENANCE.md](PROVENANCE.md) for the bounded source/asset comparison and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency licenses. Local reverse-engineering evidence, live environment records, dependencies, compiled helpers and release outputs are excluded from Git.
 
