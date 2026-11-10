@@ -243,7 +243,7 @@ handle('logs:start', (input,event)=>{
 handle('terminal:start', (input, event) => startStream(kube.terminalArgs(input), 'terminal', event, input.context));
 handle('workspace:close', async input => {watches.closeContext(input.context);kube.api.closeContext(input.context);if([...nodePending.values()].some(v=>v.context===input.context))throw new Error('Wait for the pending node session to finish before disconnecting this cluster');await sessions.closeContext(input.context);for (const [id,s] of streams) if (s.context === input.context)await stop(id); for (const item of forwards.list()) if (item.context === input.context) forwards.stop(item.id); return true; });
 handle('stream:stop', async input => {await stop(input.id);return true;});
-handle('terminal:resize', input=>{const stream=streams.get(input.id);if(!stream || stream.type!=='terminal')return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw new Error('Invalid terminal dimensions');stream.child.stdio[3].write(`${input.cols} ${input.rows}\n`);return true;});
+handle('terminal:resize', input=>{const stream=streams.get(input.id);if(!stream || stream.type!=='terminal')return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw new Error('Invalid terminal dimensions');if(process.platform==='win32')stream.child.stdin.write(`\x1eELD90:${input.cols}:${input.rows}\n`);else stream.child.stdio[3].write(`${input.cols} ${input.rows}\n`);return true;});
 handle('terminal:write', input => {
   const stream = streams.get(input.id);
   if (!stream || stream.type !== 'terminal') return false;
