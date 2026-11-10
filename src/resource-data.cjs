@@ -20,7 +20,7 @@ function read(input) {
       fields.push({ key, value, binary: property === 'binaryData' || object.kind === 'Secret' });
     }
   }
-  return { fields, immutable: object.immutable === true };
+  return { fields, immutable: object.immutable === true, resourceVersion: object.metadata?.resourceVersion };
 }
 function write(input) {
   const { doc, object } = document(input);

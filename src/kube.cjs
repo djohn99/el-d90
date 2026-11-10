@@ -68,10 +68,10 @@ function scope(input, kind, requireNamespace = false) {
 let configuredKubeconfigPaths=[];
 function setKubeconfigPaths(paths,{preserveCatalogues=false}={}){const previous=configuredKubeconfigPaths.length?configuredKubeconfigPaths:(environment().KUBECONFIG||path.join(os.homedir(),'.kube/config')).split(path.delimiter).filter(Boolean);const appended=paths.length>=previous.length&&previous.every((p,i)=>p===paths[i]);configuredKubeconfigPaths=[...paths];api.close();if(!preserveCatalogues||!appended)catalogues.clear();pendingLists.clear();}
 function environment() {
-  return { ...require('./runtime-environment.cjs').environment(), ...(configuredKubeconfigPaths.length?{KUBECONFIG:configuredKubeconfigPaths.join(path.delimiter)}:{}), PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(require('./runtime-environment.cjs').environment().PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(':') };
+  return { ...require('./runtime-environment.cjs').environment(), ...(configuredKubeconfigPaths.length?{KUBECONFIG:configuredKubeconfigPaths.join(path.delimiter)}:{}), PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(require('./runtime-environment.cjs').environment().PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(path.delimiter) };
 }
 function executable() {
-  const candidates = [process.env.EL_D90_KUBECTL || process.env.HARBOR_KUBECTL, ...environment().PATH.split(':').map(p => path.join(p, 'kubectl'))].filter(Boolean);
+  const candidates = [process.env.EL_D90_KUBECTL || process.env.HARBOR_KUBECTL, ...environment().PATH.split(path.delimiter).map(p => path.join(p, process.platform==='win32'?'kubectl.exe':'kubectl'))].filter(Boolean);
   for (const p of candidates) { try { fs.accessSync(p, fs.constants.X_OK); return p; } catch {} }
   throw new Error('kubectl was not found. Install kubectl or launch el-d90 with EL_D90_KUBECTL=/absolute/path/to/kubectl.');
 }
@@ -194,7 +194,7 @@ async function metrics(input) {
 
 function findHelm() {
   if (process.env.EL_D90_HELM) { fs.accessSync(process.env.EL_D90_HELM, fs.constants.X_OK); return process.env.EL_D90_HELM; }
-  for (const folder of environment().PATH.split(':')) { const p = path.join(folder, 'helm'); try { fs.accessSync(p, fs.constants.X_OK); return p; } catch {} }
+  for (const folder of environment().PATH.split(path.delimiter)) { const p = path.join(folder, process.platform==='win32'?'helm.exe':'helm'); try { fs.accessSync(p, fs.constants.X_OK); return p; } catch {} }
   throw new Error('Helm is not installed or is not in PATH. Install Helm to inspect releases.');
 }
 function helmScope(input) {

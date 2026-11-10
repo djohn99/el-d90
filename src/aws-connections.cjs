@@ -28,7 +28,7 @@ function safeError(error) {
   return 'AWS could not complete this request. Check your profile, region, network and AWS CLI configuration.';
 }
 function binary() {
-  for (const file of [kube.environment().EL_D90_AWS, kube.environment().EL_D90_SHELL_AWS, ...kube.environment().PATH.split(path.delimiter).map(dir => path.join(dir, 'aws'))].filter(Boolean)) {
+  for (const file of [kube.environment().EL_D90_AWS, kube.environment().EL_D90_SHELL_AWS, ...kube.environment().PATH.split(path.delimiter).map(dir => path.join(dir, process.platform==='win32'?'aws.exe':'aws'))].filter(Boolean)) {
     try { nativeFs.accessSync(file, nativeFs.constants.X_OK); return file; } catch {}
   }
   throw Error('AWS CLI not found');

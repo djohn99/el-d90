@@ -194,7 +194,16 @@ function hasYamlDraft(){return !!$('yaml-editor').value&&$('yaml-editor').value!
 function stageDataYaml(owner,object,epoch,draft){if(state!==owner||owner.detailGeneration!==epoch||owner.selected?.metadata.uid!==object.metadata.uid)return;if(hasYamlDraft())throw Error('The YAML editor has a newer draft. Review it first.');owner.originalYaml=draft.original;$('yaml-editor').value=draft.text;editorTools?.clear();tab('yaml').catch(error);}
 function attachResourceData(object,kind){
   if(object.kind!=='ConfigMap')return;const owner=state,epoch=owner.detailGeneration,host=document.createElement('section');host.id='resource-data-section';host.innerHTML='<h3>Data & binary data</h3>';$('detail-summary').insertBefore(host,$('resource-summary-core')?.nextSibling||null);
-  window.elD90ResourceData.attach(host,{object,demo:owner.demo,invoke,input:detailInput(),identity:{kind:object.kind,name:object.metadata.name,namespace:object.metadata.namespace,uid:object.metadata.uid},hasDraft:hasYamlDraft,isCurrent:()=>state===owner&&owner.detailGeneration===epoch&&!$('drawer').classList.contains('hidden'),onReview:draft=>stageDataYaml(owner,object,epoch,draft)});
+  window.elD90ResourceData.attach(host,{object,demo:owner.demo,invoke,input:detailInput(),identity:{kind:object.kind,name:object.metadata.name,namespace:object.metadata.namespace,uid:object.metadata.uid},hasDraft:hasYamlDraft,isCurrent:()=>state===owner&&owner.detailGeneration===epoch&&!$('drawer').classList.contains('hidden'),onReview:draft=>stageDataYaml(owner,object,epoch,draft),onClose:()=>closeDrawer(),onSave:async draft=>{
+    if(owner.demo)throw Error('Demo mode: changes are not sent to a cluster.');
+    const current=()=>state===owner&&owner.detailGeneration===epoch&&owner.selected?.metadata.uid===object.metadata.uid;
+    const input={context:owner.context,namespace:object.metadata.namespace,yaml:draft.text};
+    await invoke('kube:validate',input);if(!current())throw Error('Resource selection changed. Reopen the ConfigMap.');
+    const result=await invoke('kube:apply',input);if(result.cancelled)return{cancelled:true};
+    const text=await invoke('kube:yaml',{context:owner.context,namespace:object.metadata.namespace,resource:'configmaps',name:object.metadata.name});
+    const parsed=await invoke('resource-data:read',{text,identity:{kind:object.kind,name:object.metadata.name,namespace:object.metadata.namespace,uid:object.metadata.uid}});
+    if(current()){if(!hasYamlDraft()){$('yaml-editor').value=text;owner.originalYaml=text;richEditor?.sync();}await refresh();}return parsed;
+  }});
 }
 async function stageSecretKey(owner,object,edit,epoch){
   const current=()=>state===owner&&owner.detailGeneration===epoch&&owner.selected?.metadata.uid===object.metadata.uid;
@@ -239,7 +248,7 @@ async function tab(value, restoring = false) {if(value!=='summary')window.elD90S
   if(value==='metrics'){const owner=state,epoch=owner.detailGeneration,object=owner.selected;await window.elD90History.render($('detail-metrics'),{context:owner.context,namespace:object.metadata.namespace||'*',namespaces:object.metadata.namespace?[object.metadata.namespace]:[],target:{resource:owner.selectedKind,namespace:object.metadata.namespace,name:object.metadata.name,uid:owner.selectedKind==='pods'?object.metadata.uid:undefined},containers:window.elD90WorkloadHistory.containers(object).map(c=>c.name),demo:owner.demo,invoke,autoSelectSingle:true,settings:owner.historySettings,onSettings:value=>{owner.historySettings=value;saveWorkspacePreferences();},isCurrent:()=>state===owner&&owner.detailGeneration===epoch&&owner.tab==='metrics'});}
   if(value==='events')await loadResourceEvents();
   if (value === 'logs' && (!restoring || !state.logs)) await startLogs();
-  if (value === 'terminal') {const node=state.selectedKind==='nodes';$('terminal-container').classList.toggle('hidden',node);$('terminal-shell').classList.toggle('hidden',node);hidden('node-shell-options',!node);$('connect-terminal').textContent=node?'Open node shell':'Connect shell';document.querySelector('.terminal-hint').textContent=node?'Node shell through Kubernetes. No SSH configuration required. Closing the terminal cleans up its temporary Pod.':'Interactive shell in this pod. Commands use the pod permissions.';initTerminal();}
+  if (value === 'terminal') {const node=state.selectedKind==='nodes';$('terminal-container').classList.toggle('hidden',node);$('terminal-shell').classList.toggle('hidden',node);hidden('node-shell-options',!node);$('connect-terminal').textContent=state.terminal?'Reconnect':node?'Open node shell':'Retry connection';document.querySelector('#detail-terminal .terminal-hint').textContent=node?'Node shell through Kubernetes. No SSH configuration required. Closing the terminal cleans up its temporary Pod.':'Interactive shell in this pod. Commands use the pod permissions.';initTerminal();if(!restoring&&!state.terminal)await connectTerminal({automatic:true});}
 }
 async function startLogs() {
   const owner = state; const request={...detailInput(),container:$('log-container').value,previous:$('previous-logs').checked};
@@ -255,17 +264,32 @@ async function startLogs() {
 function initTerminal() {
   if (state.terminalInstance) return;
   const term = new Terminal({allowProposedApi:true, cols: 100, rows: 28, fontFamily: 'Menlo, monospace', fontSize: 11, cursorBlink: true, scrollback: 4000, theme: { background: '#101719', foreground: '#c4d6c9', cursor: '#c1edb7', selectionBackground: '#45634b' }, ...window.elD90Settings.terminal() });
-  const owner = state; const host=document.createElement('div');host.className='workspace-terminal';owner.terminalHost=host;$('terminal').append(host);term.open(host);owner.terminalFind=window.elD90TextFind?.attachTerminal(term,host,()=>owner.fitAddon?.fit());const fit=new FitAddon.FitAddon();term.loadAddon(fit);owner.fitAddon=fit;owner.resizeObserver=new ResizeObserver(()=>{if(host.offsetWidth>0)fit.fit();});owner.resizeObserver.observe(host);term.onResize(size=>{if(owner.terminal)invoke('terminal:resize',{id:owner.terminal,cols:Math.max(20,Math.min(400,size.cols)),rows:Math.max(5,Math.min(200,size.rows))}).catch(()=>{});});requestAnimationFrame(()=>fit.fit()); term.writeln(state.selectedKind==='nodes'?'el-d90 node terminal\r\nClick Open node shell to connect through Kubernetes.\r\n':'el-d90 pod terminal\r\nSelect a container and click Connect shell.\r\n');
+  const owner = state; const host=document.createElement('div');host.className='workspace-terminal';owner.terminalHost=host;$('terminal').append(host);term.open(host);owner.terminalFind=window.elD90TextFind?.attachTerminal(term,host,()=>owner.fitAddon?.fit());const fit=new FitAddon.FitAddon();term.loadAddon(fit);owner.fitAddon=fit;owner.resizeObserver=new ResizeObserver(()=>{if(host.offsetWidth>0)fit.fit();});owner.resizeObserver.observe(host);term.onResize(size=>{if(owner.terminal)invoke('terminal:resize',{id:owner.terminal,cols:Math.max(20,Math.min(400,size.cols)),rows:Math.max(5,Math.min(200,size.rows))}).catch(()=>{});});requestAnimationFrame(()=>fit.fit()); term.writeln(state.selectedKind==='nodes'?'el-d90 node terminal\r\nOpening the node shell confirmation…\r\n':'el-d90 pod terminal\r\nConnecting to the selected container…\r\n');
   term.onData(data => { if (owner.terminal) invoke('terminal:write', { id: owner.terminal, data }).catch(error); }); state.terminalInstance = term;if(owner.terminalBuffer)term.write(owner.terminalBuffer);
 }
-async function connectTerminal() {
-  initTerminal();
-  if(state.selectedKind==='nodes'){if(state.demo){state.terminalInstance.writeln('[Demo: no node shell or Pod created.]');return;}const owner=state,node=state.selected,epoch=state.detailGeneration,button=$('connect-terminal');button.disabled=true;try{const result=await invoke('node:debug-start',{context:owner.context,nodeName:node.metadata.name,namespace:$('node-shell-namespace').value.trim(),image:$('node-shell-image').value.trim(),hostShell:true});if(!result.cancelled)await acceptNodeSession(owner,node,result,epoch);else owner.terminalInstance?.writeln('[Node shell cancelled.]');}catch(e){owner.terminalInstance?.writeln(e.message);}finally{button.disabled=false;}return;}
-  if (state.demo) { state.terminalInstance.writeln('\r\n[Demo mode: no shell is connected.]'); return; }
-  const request={...detailInput(),container:$('terminal-container').value,shell:$('terminal-shell').value};const currentOwner=state;
-  if (state.terminal) await invoke('stream:stop', { id: state.terminal });
-  const owner=currentOwner; const generation = owner.detailGeneration; owner.terminalInstance.clear();owner.terminalBuffer='';
-  try { const id = await invoke('terminal:start', request); if (generation !== owner.detailGeneration) await invoke('stream:stop', { id }); else { owner.terminal = id;if(state===owner){owner.fitAddon?.fit();owner.terminalInstance.focus();}await invoke('terminal:resize',{id,cols:Math.max(20,Math.min(400,owner.terminalInstance.cols)),rows:Math.max(5,Math.min(200,owner.terminalInstance.rows))}); } } catch (e) { owner.terminalInstance.writeln(e.message); }
+async function connectTerminal({force=false,automatic=false}={}) {
+  initTerminal();const owner=state,generation=owner.detailGeneration,button=$('connect-terminal');
+  if(owner.terminalConnecting===generation)return;
+  if(owner.terminal&&!force){owner.terminalInstance.focus();return;}
+  if(automatic&&(button.dataset.permissionDenied==='true'||button.dataset.policyBlocked==='true'))return;
+  if(owner.demo){owner.terminalInstance.writeln(owner.selectedKind==='nodes'?'[Demo: no node shell or Pod created.]':'[Demo mode: no shell is connected.]');return;}
+  const node=owner.selected,kind=owner.selectedKind,request={...detailInput(),container:$('terminal-container').value,shell:$('terminal-shell').value};
+  const nodeRequest={context:owner.context,nodeName:node?.metadata.name,namespace:$('node-shell-namespace').value.trim(),image:$('node-shell-image').value.trim(),hostShell:true};
+  owner.terminalConnecting=generation;button.disabled=true;button.textContent='Connecting…';
+  try{
+    const previous=owner.terminal;owner.terminal=null;if(previous)await invoke('stream:stop',{id:previous});
+    if(state!==owner||owner.detailGeneration!==generation)return;
+    owner.terminalInstance.clear();owner.terminalBuffer='';
+    if(kind==='nodes'){
+      const result=await invoke('node:debug-start',nodeRequest);if(result.cancelled){owner.terminalInstance.writeln('[Node shell cancelled.]');return;}
+      await acceptNodeSession(owner,node,result,generation);return;
+    }
+    const id=await invoke('terminal:start',request);
+    if(state!==owner||owner.detailGeneration!==generation){await invoke('stream:stop',{id});return;}
+    owner.terminal=id;owner.fitAddon?.fit();owner.terminalInstance.focus();
+    await invoke('terminal:resize',{id,cols:Math.max(20,Math.min(400,owner.terminalInstance.cols)),rows:Math.max(5,Math.min(200,owner.terminalInstance.rows))});
+  }catch(e){owner.terminalInstance?.writeln(e.message);}
+  finally{if(owner.terminalConnecting===generation)owner.terminalConnecting=null;if(state===owner&&owner.detailGeneration===generation){button.disabled=button.dataset.permissionDenied==='true'||button.dataset.policyBlocked==='true';button.textContent=owner.terminal?'Reconnect':'Retry connection';workspaceUI?.applyReadOnly();}}
 }
 async function editYaml(apply) {
   if (state.selectedKind === 'helm') return;
@@ -320,7 +344,8 @@ document.querySelector('.detail-tabs').onclick = e => { const b = e.target.close
 $('new-yaml').onclick = () => createResource(); $('validate-yaml').onclick = () => editYaml(false); $('apply-yaml').onclick = () => editYaml(true);
 $('restart-logs').onclick = $('log-container').onchange = $('previous-logs').onchange = startLogs;
 $('save-logs').onclick = () => invoke('file:save', { text: detailLogViewer?.getText()||'' }).catch(error);
-$('connect-terminal').onclick = connectTerminal;
+$('connect-terminal').onclick = ()=>connectTerminal({force:true});
+for(const id of ['terminal-container','terminal-shell'])$(id).onchange=()=>{if(state.tab==='terminal')connectTerminal({force:true});};
 $('yaml-editor').onkeydown = e => { if (e.key === 'Tab') { e.preventDefault(); const t = e.target, start = t.selectionStart, end = t.selectionEnd; t.setRangeText('  ', start, end, 'end'); } };
 document.addEventListener('keydown', e => {if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key.toLowerCase()==='p'){e.preventDefault();openCommandPalette();return;} if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (state.view === 'overview' || SPECIAL_VIEWS.includes(state.view)) navigate('pods').then(() => $('search').focus()); else $('search').focus(); } if(e.key==='Escape'){if(!$('namespace-popover').classList.contains('hidden')){hidden('namespace-popover',true);$('namespace-multi').setAttribute('aria-expanded','false');}else closeDrawer();} });
 window.eld90?.onStream(message => {
@@ -486,7 +511,7 @@ function storeWorkspaceUI(owner=state) {
 }
 function saveWorkspacePreferences() {
   if(state.demo)return;
-  try {localStorage.setItem('el-d90-workspaces-v1',JSON.stringify({active:state.context,workspaces:[...clusterWorkspaces.values()].filter(w=>!w.demo).map(w=>({context:w.context,namespaces:w.namespaces,view:w.view,historySettings:w.historySettings,search:w.search||'',statusFilter:w.statusFilter||'',labelFilter:w.labelFilter||'',extensionPage:w.extensionPage,clusterRole:w.clusterRole,autoRefresh:w.autoRefresh || false}))}));}catch{}
+  try {localStorage.setItem('el-d90-workspaces-v1',JSON.stringify({active:state.context,workspaces:[...clusterWorkspaces.values()].filter(w=>!w.demo).map(w=>({context:w.context,namespaces:w.namespaces,view:w.view==='connections'?'overview':w.view,historySettings:w.historySettings,search:w.search||'',statusFilter:w.statusFilter||'',labelFilter:w.labelFilter||'',extensionPage:w.extensionPage,clusterRole:w.clusterRole,autoRefresh:w.autoRefresh || false}))}));}catch{}
 }
 function renderClusterTabs() {
   renderContextPicker();
@@ -520,10 +545,10 @@ function paintWorkspace() {window.elD90SecretValues.clear();window.elD90Resource
 }
 async function selectContext(context) {
   ++workspaceIntent;
-  if(state.context===context && state.initialized)return;
+  if(state.context===context && state.initialized){if(state.view==='connections')await navigate('overview');return;}
   if(state.context!==context){workspaceUI?.cancel();window.elD90History.stopContext(state.context);if(state.readRequestId&&state.context)invoke('read:cancel',{context:state.context,requestId:state.readRequestId}).catch(()=>{});}
   storeWorkspaceUI();if(state.context)clusterWorkspaces.set(workspaceKey(state.context),state);
-  const demo=state.demo,key=workspaceKey(context,demo),known=clusterWorkspaces.get(key);state=known || freshWorkspace(context,demo);
+  const demo=state.demo,key=workspaceKey(context,demo),known=clusterWorkspaces.get(key);state=known || freshWorkspace(context,demo);if(state.view==='connections')state.view='overview';
   state.generation=++requestEpoch;state.detailGeneration=++detailEpoch;
   if(context)clusterWorkspaces.set(key,state);paintWorkspace();notice();
   if(!context){hidden('welcome',false);hidden('overview',true);hidden('resource-view',true);hidden('special-view',true);return;}
@@ -575,7 +600,7 @@ async function restoreWorkspacePreferences() {
     owner.namespace=owner.namespaces.length===1?owner.namespaces[0]:'*';owner.namespaceNames=[...owner.namespaces];
     if(['all','worker','control-plane'].includes(pref.clusterRole))owner.clusterRole=pref.clusterRole;
     if(pref.historySettings&&typeof pref.historySettings==='object')owner.historySettings=pref.historySettings;
-    if(Object.hasOwn(titles,pref.view))owner.view=pref.view;if(pref.extensionPage&&typeof pref.extensionPage.id==='string'&&typeof pref.extensionPage.extensionId==='string')owner.extensionPage=pref.extensionPage;owner.search=typeof pref.search==='string'?pref.search.slice(0,500):'';owner.statusFilter=typeof pref.statusFilter==='string'?pref.statusFilter:'';owner.labelFilter=typeof pref.labelFilter==='string'?pref.labelFilter.slice(0,500):'';owner.autoRefresh=Boolean(pref.autoRefresh);owner.connectionLabel='Ready';
+    if(Object.hasOwn(titles,pref.view)&&pref.view!=='connections')owner.view=pref.view;if(pref.extensionPage&&typeof pref.extensionPage.id==='string'&&typeof pref.extensionPage.extensionId==='string')owner.extensionPage=pref.extensionPage;owner.search=typeof pref.search==='string'?pref.search.slice(0,500):'';owner.statusFilter=typeof pref.statusFilter==='string'?pref.statusFilter:'';owner.labelFilter=typeof pref.labelFilter==='string'?pref.labelFilter.slice(0,500):'';owner.autoRefresh=Boolean(pref.autoRefresh);owner.connectionLabel='Ready';
     clusterWorkspaces.set(workspaceKey(pref.context,false),owner);
   }
   const active=valid.find(pref=>pref.context===prefs.active)||valid[0];if(active)await selectContext(active.context);
@@ -590,13 +615,13 @@ setInterval(async()=>{
 
 function addManagementActions(object,kind) {
   const node=kind==='nodes',cron=kind==='cronjobs';
-  $('detail-summary').insertAdjacentHTML('beforeend',`<h3>Resource management</h3><div class="workload-actions"><button id="describe-resource" class="button secondary">Describe</button>${['deployments','statefulsets','daemonsets'].includes(kind)?'<button id="rollout-status" class="button secondary">Rollout status</button>':''}${node?'<button class="button secondary node-action" data-action="cordon">Cordon</button><button class="button secondary node-action" data-action="uncordon">Uncordon</button><button class="danger-button node-action" data-action="drain">Drain node</button>':''}${cron?`<button class="button secondary node-action" data-action="${object.spec?.suspend?'resume':'suspend'}">${object.spec?.suspend?'Resume schedule':'Suspend schedule'}</button>`:''}<button id="delete-resource" class="danger-button">Delete resource</button></div><label class="confirm-name-label">For deletion or drain, type the exact resource name<input id="resource-confirm-name" aria-label="Confirm resource name" placeholder="${escape(object.metadata.name)}"></label><pre id="resource-management-output" class="console management-output" role="status"></pre>`);
+  $('detail-summary').insertAdjacentHTML('beforeend',`<h3>Resource management</h3><div class="workload-actions"><button id="describe-resource" class="button secondary">Describe</button>${['deployments','statefulsets','daemonsets'].includes(kind)?'<button id="rollout-status" class="button secondary">Rollout status</button>':''}${node?'<button class="button secondary node-action" data-action="cordon">Cordon</button><button class="button secondary node-action" data-action="uncordon">Uncordon</button><button class="danger-button node-action" data-action="drain">Drain node</button>':''}${cron?`<button class="button secondary node-action" data-action="${object.spec?.suspend?'resume':'suspend'}">${object.spec?.suspend?'Resume schedule':'Suspend schedule'}</button>`:''}<button id="delete-resource" class="danger-button">Delete resource</button></div>${node?`<label class="confirm-name-label">For node drain, type the exact node name<input id="resource-confirm-name" aria-label="Confirm resource name" placeholder="${escape(object.metadata.name)}"></label>`:''}<pre id="resource-management-output" class="console management-output" role="status"></pre>`);
   const owner=state,epoch=state.detailGeneration,target={context:owner.context,namespace:object.metadata.namespace || '*',resource:kind,name:object.metadata.name};
   const display=text=>{if(state===owner && state.detailGeneration===epoch)$('resource-management-output').textContent=text;};
   async function read(channel) {if(owner.demo)return display('Demo resource details · no cluster request.');try{display(await invoke(channel,target));}catch(e){display(e.message);}}
   async function mutate(action) {
-    const confirmName=$('resource-confirm-name').value;
-    if(['delete','drain'].includes(action)&&confirmName!==target.name)return display('Type the exact resource name before continuing.');
+    const confirmName=$('resource-confirm-name')?.value;
+    if(action==='drain'&&confirmName!==target.name)return display('Type the exact resource name before continuing.');
     if(owner.demo)return display('Demo mode: no resources are changed.');
     try{display('Waiting for confirmation…');const result=await invoke('resource:action',{...target,action,confirmName});display(result.cancelled?'Action cancelled.':result.output);if(!result.cancelled && state===owner)await refresh();}catch(e){display(e.message);}
   }
@@ -627,6 +652,7 @@ async function renderApiFamily(view,generation){
   const paint=()=>window.elD90Topology.renderApi($('api-family-content'),{context:owner.context,namespace:owner.namespace,namespaces:[...owner.namespaces],resource:$('api-family-type').value,demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.generation===generation,onOpenResource:ref=>openRelatedResource(owner,ref)});$('api-family-type').onchange=paint;await paint();
 }
 async function acceptNodeSession(owner,node,result,epoch){
+  if(state!==owner||owner.detailGeneration!==epoch){await invoke('stream:stop',{id:result.id});return;}
   owner.terminal=result.id;owner.nodeSession={...result,node};owner.terminalBuffer='';owner.selected=node;owner.selectedKind='nodes';owner.savedTab='terminal';owner.drawerVisible=true;
   owner.terminalInstance?.clear();
   if(state===owner&&state.detailGeneration===epoch){document.querySelector('[data-tab="terminal"]').disabled=false;await tab('terminal');owner.fitAddon?.fit();owner.terminalInstance?.focus();}

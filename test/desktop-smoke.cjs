@@ -40,7 +40,6 @@ function alive(pid) { try { process.kill(pid, 0); return true; } catch { return 
     await page.getByRole('button', { name: 'Logs', exact: true }).click();
     await expectText(page, '#logs-output', 'DEMO');
     await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-    await page.getByRole('button', { name: 'Connect shell', exact: true }).click();
     assert.equal(calls().length, 0, 'Demo must not invoke kubectl');
     await page.getByRole('button', { name: 'Close details' }).click();
     await sidebarView(page,'overview');
@@ -71,8 +70,7 @@ function alive(pid) { try { process.kill(pid, 0); return true; } catch { return 
     await expectText(page, '#logs-output', 'FIXTURE_LOG_CONNECTED');
     const logPid = calls().find(c => c.args.includes('logs')).pid;
     await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-    await page.getByRole('button', { name: 'Connect shell', exact: true }).click();
-    await page.waitForFunction(() => state.terminalInstance.buffer.active.getLine(0)?.translateToString().includes('FIXTURE_SHELL_CONNECTED'));
+    await page.waitForFunction(() => (state.terminalBuffer||'').includes('FIXTURE_SHELL_CONNECTED')).catch(async error=>{console.error('Terminal fixture state:',await page.evaluate(()=>({id:state.terminal,pending:state.terminalConnecting,buffer:state.terminalBuffer,kind:state.selectedKind,button:document.querySelector('#connect-terminal').textContent,lines:Array.from({length:5},(_,i)=>state.terminalInstance.buffer.active.getLine(i)?.translateToString())})));throw error;});
     await page.locator('.xterm-helper-textarea').focus(); await page.keyboard.type('hello'); await page.keyboard.press('Enter');
     await page.waitForFunction(() => { const b = state.terminalInstance.buffer.active; return Array.from({ length: b.length }, (_, i) => b.getLine(i)?.translateToString()).join('\n').includes('fixture received: hello'); });
     const terminalPid = calls().find(c => c.args.includes('exec')).pid;

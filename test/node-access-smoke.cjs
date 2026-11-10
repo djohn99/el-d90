@@ -40,7 +40,7 @@ const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpd
  await page.waitForFunction(()=>(state.terminalBuffer||'').includes('SSH_RECEIVED:echo-check'));
  await page.locator('#close-drawer').click();
  await page.evaluate(()=>openDetail({kind:'Node',metadata:{name:'fixture-node'},spec:{},status:{}},'nodes'));
- await page.locator('[data-tab="terminal"]').click();await page.locator('#connect-terminal').click();
+ await page.locator('[data-tab="terminal"]').click();
  await page.waitForFunction(()=>(state.terminalBuffer||'').includes('FIXTURE_SHELL_CONNECTED'));
  await page.evaluate(()=>state.terminalInstance.input('debug-check\r'));
  await page.waitForFunction(()=>(state.terminalBuffer||'').includes('fixture received: debug-check'));

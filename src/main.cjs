@@ -43,7 +43,7 @@ const forwards = new Forwards();
 const demo = process.argv.includes('--demo');
 const index = pathToFileURL(path.join(__dirname, 'index.html')).href;
 const streams = new Map();
-const sessions=new Sessions({helper:app.isPackaged?path.join(process.resourcesPath,'app.asar.unpacked/assets/el-d90-pty'):path.join(__dirname,'../assets/el-d90-pty'),directory:path.join(app.getPath('temp'),'el-d90-terminals'),onData:value=>{if(window&&!window.webContents.isDestroyed())window.webContents.send('session:data',value);}});
+const sessions=new Sessions({helper:app.isPackaged?path.join(process.resourcesPath,'app.asar.unpacked/assets',require('./platform.cjs').ptyName()):path.join(__dirname,'../assets',require('./platform.cjs').ptyName()),directory:path.join(app.getPath('temp'),'el-d90-terminals'),onData:value=>{if(window&&!window.webContents.isDestroyed())window.webContents.send('session:data',value);}});
 let window;
 app.setName('el-d90');
 // Keep the existing local profile when upgrading from Harbor.
@@ -75,7 +75,7 @@ async function stop(id) {
 function startStream(args, type, event, context, options={}) {
   for (const [id, s] of streams) if (s.type === type && s.context === context) stop(id);
   const id = randomUUID();
-  const helper = app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked/assets/el-d90-pty') : path.join(__dirname, '../assets/el-d90-pty');
+  const helper = app.isPackaged ? path.join(process.resourcesPath,'app.asar.unpacked/assets',require('./platform.cjs').ptyName()) : path.join(__dirname,'../assets',require('./platform.cjs').ptyName());
   const command = type === 'terminal' ? helper : kube.executable();
   const argv = type === 'terminal' ? [options.command || kube.executable(), ...args] : args;
   const child = spawn(command, argv, { shell: false, detached: true, env: { ...kube.environment(), TERM: 'xterm-256color', COLUMNS: '100', LINES: '28' }, stdio: type === 'terminal' ? ['pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'] });
@@ -144,6 +144,7 @@ handle('aws:connect',async input=>{
   });awsRegistration=registration;return registration;
 });
 handle('connections:overview',()=>connections.overview());
+handle('connections:namespaces',input=>connections.namespaces(input));
 handle('connections:test',input=>connections.test(input));
 handle('connections:choose',async()=>{const selection=await dialog.showOpenDialog(window,{title:'Import kubeconfig paths',properties:['openFile','multiSelections','showHiddenFiles']});if(selection.canceled)return{cancelled:true};const inspected=await connections.inspectFiles(selection.filePaths),token=randomUUID();for(const[id,p]of importPreviews)if(p.expires<Date.now())importPreviews.delete(id);if(importPreviews.size>=10)importPreviews.delete(importPreviews.keys().next().value);importPreviews.set(token,{...inspected,expires:Date.now()+300000});return{token,...inspected};});
 handle('connections:use',async input=>{const preview=importPreviews.get(input.token);if(!preview||preview.expires<Date.now())throw Error('Choose kubeconfig files again; the import preview expired');const checked=await connections.inspectFiles(preview.files.map(f=>f.path));if(checked.files.some((f,i)=>f.digest!==preview.files[i].digest))throw Error('A kubeconfig file changed after preview. Choose the files again.');const value=await settingsStore.read(settingsPath());let existing=connections.existingPaths(value);if(!value.kubeconfig.paths.length){const available=await Promise.all(existing.map(async p=>await fs.access(p).then(()=>p,()=>null)));existing=available.filter(Boolean);}value.kubeconfig.paths=[...new Set([...existing,...checked.files.map(f=>f.path)])];await settingsStore.write(settingsPath(),settingsStore.stringify(value));importPreviews.delete(input.token);return{restartRequired:true,paths:value.kubeconfig.paths};});
@@ -242,7 +243,7 @@ handle('logs:start', (input,event)=>{
 handle('terminal:start', (input, event) => startStream(kube.terminalArgs(input), 'terminal', event, input.context));
 handle('workspace:close', async input => {watches.closeContext(input.context);kube.api.closeContext(input.context);if([...nodePending.values()].some(v=>v.context===input.context))throw new Error('Wait for the pending node session to finish before disconnecting this cluster');await sessions.closeContext(input.context);for (const [id,s] of streams) if (s.context === input.context)await stop(id); for (const item of forwards.list()) if (item.context === input.context) forwards.stop(item.id); return true; });
 handle('stream:stop', async input => {await stop(input.id);return true;});
-handle('terminal:resize', input=>{const stream=streams.get(input.id);if(!stream || stream.type!=='terminal')return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw new Error('Invalid terminal dimensions');stream.child.stdio[3].write(`${input.cols} ${input.rows}\n`);return true;});
+handle('terminal:resize', input=>{const stream=streams.get(input.id);if(!stream || stream.type!=='terminal')return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw new Error('Invalid terminal dimensions');if(process.platform==='win32')stream.child.stdin.write(`\x1eELD90:${input.cols}:${input.rows}\n`);else stream.child.stdio[3].write(`${input.cols} ${input.rows}\n`);return true;});
 handle('terminal:write', input => {
   const stream = streams.get(input.id);
   if (!stream || stream.type !== 'terminal') return false;
@@ -258,7 +259,7 @@ handle('file:save', async input => {
 handle('app:find',input=>{if(typeof input.query!=='string'||!input.query||input.query.length>1000)throw Error('Enter search text up to 1000 characters');return{id:window.webContents.findInPage(input.query,{forward:input.forward!==false,findNext:input.findNext===true,matchCase:input.matchCase===true})};});
 handle('app:find-stop',()=>{window.webContents.stopFindInPage('clearSelection');return{};});
 async function createWindow() {
-  window = new BrowserWindow({ width: 1460, height: 940, minWidth: 1080, minHeight: 700, title: 'el-d90', backgroundColor: '#101519', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 20, y: 21 }, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true } });
+  window = new BrowserWindow({ width: 1460, height: 940, minWidth: 1080, minHeight: 700, title: 'el-d90', backgroundColor: '#101519', titleBarStyle: process.platform==='darwin'?'hiddenInset':'default', trafficLightPosition: { x: 20, y: 21 }, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true } });
   window.webContents.on('found-in-page',(_event,result)=>window?.webContents.send('app:find-result',result));
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', e => e.preventDefault());

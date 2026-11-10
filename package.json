@@ -1,7 +1,7 @@
 {
   "name": "el-d90",
   "productName": "el-d90",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "Your local Kubernetes workspace",
   "author": "David John",
   "license": "MIT",
@@ -12,7 +12,7 @@
     "demo": "electron . --demo",
     "test": "node --test test/*.test.cjs",
     "package": "electron-packager . el-d90 --platform=darwin --arch=arm64 --out=dist --overwrite --app-bundle-id=local.davidjohn.el-d90 --app-category-type=public.app-category.developer-tools --ignore=^/research --ignore=^/test --ignore=^/dist --ignore=^/scripts --icon=assets/el-d90.icns --asar.unpackDir=assets --app-copyright='Copyright © 2026 David John' --ignore=^/[.]github",
-    "build:native": "node scripts/prepare-editor.cjs && clang -arch arm64 -mmacosx-version-min=13.0 -O2 -Wall -Wextra src/pty.c -o assets/el-d90-pty",
+    "build:native": "node scripts/build-native.cjs",
     "postinstall": "node node_modules/electron/install.js",
     "prestart": "npm run build:native",
     "predemo": "npm run build:native",
@@ -47,7 +47,8 @@
     "test:column-resize": "node test/column-resize-smoke.cjs",
     "test:navigation": "node test/navigation-ui-smoke.cjs",
     "test:pagination": "node test/pagination-smoke.cjs",
-    "test:text-find": "node test/text-find-smoke.cjs"
+    "test:text-find": "node test/text-find-smoke.cjs",
+    "package:windows": "node scripts/package-windows.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-sso": "^3.1161.0",
@@ -61,6 +62,7 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "electron": "45.1.0",
+    "esbuild": "0.25.12",
     "monaco-editor": "0.57.0",
     "playwright": "1.64.1"
   },
@@ -71,5 +73,12 @@
   "homepage": "https://github.com/djohn99/el-d90#readme",
   "bugs": {
     "url": "https://github.com/djohn99/el-d90/issues"
+  },
+  "overrides": {
+    "dompurify": "3.4.17",
+    "@electron/asar": {
+      "glob": "14.0.4",
+      "minimatch": "11.0.5"
+    }
   }
 }

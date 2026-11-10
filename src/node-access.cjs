@@ -30,7 +30,7 @@ function validateSSH(input) {
     args.push('-i',input.identityFile);
   }
   args.push(user?`${user}@${address}`:address);
-  return {command:'/usr/bin/ssh',args,context,nodeName:node,host:address,user,port,confirmation:{title:`Connect to ${node} over SSH?`,detail:`SSH destination: ${user?user+'@':''}${address}${input.useConfigAlias?' (existing SSH configuration)':':'+port}\nKubernetes context: ${context}\nSSH uses your existing keys, SSH agent and config. Host-key prompts remain enabled; no key values are stored by el-d90.`}};
+  return {command:process.platform==='win32'?(require('./platform.cjs').findExecutable('ssh',kube.environment())||'ssh.exe'):'/usr/bin/ssh',args,context,nodeName:node,host:address,user,port,confirmation:{title:`Connect to ${node} over SSH?`,detail:`SSH destination: ${user?user+'@':''}${address}${input.useConfigAlias?' (existing SSH configuration)':':'+port}\nKubernetes context: ${context}\nSSH uses your existing keys, SSH agent and config. Host-key prompts remain enabled; no key values are stored by el-d90.`}};
 }
 async function discover(input) {
   const context=kube.string(input.context,'context'),name=nodeName(input.nodeName);

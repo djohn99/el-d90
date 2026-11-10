@@ -42,7 +42,7 @@ function validate(input) {
   } else {
     throw new Error('Unsupported resource action');
   }
-  return { action, resource: t.resource, name: t.name, context: t.context, namespace: t.namespace || null, args, timeout, confirmation: { title: `${action[0].toUpperCase() + action.slice(1)} ${t.name}?`, impact, highRisk, typedName: highRisk ? t.name : null } };
+  return { action, resource: t.resource, name: t.name, context: t.context, namespace: t.namespace || null, args, timeout, confirmation: { title: `${action[0].toUpperCase() + action.slice(1)} ${t.name}?`, impact, highRisk, typedName: action === 'drain' ? t.name : null } };
 }
 
 async function perform(input) {

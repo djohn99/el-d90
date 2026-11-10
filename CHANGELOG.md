@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.10] - 2026-11-10
+
+- Resolve the seven dependency-advisory package entries, rebuild Monaco from ESM with the patched DOMPurify3.4.17, and gate releases on zero npm advisories.
+- Add experimental Windows build infrastructure; defer Windows publication pending native acceptance. Release 0.5.10 ships the Apple Silicon DMG only.
+
+- Clear prior-role namespace search state and retain unsaved ConfigMap data drafts across detail dismissal in memory.
+
+- Confirm all resource deletions without typing names; retain the separate typed confirmation for node drain.
+- Start a cluster terminal when opening an empty Terminal & logs panel. Connect resource terminals automatically on opening their tab, reuse active sessions, and reconnect when selecting a different Pod container or shell.
+- Keep Connect clusters as a deliberate File-menu page rather than restoring it on startup or cluster switching.
+- Simplify connection setup and automatically load searchable, checked namespace choices when selecting an EKS cluster, with manual entry when namespace listing is restricted.
+- Save ConfigMap data directly, including Save & Close and keyboard save; retain optional YAML review, multiline/binary values, cancellation drafts and validation feedback.
+
 ## [0.5.9] - 2026-11-08
 
 ### Fixed

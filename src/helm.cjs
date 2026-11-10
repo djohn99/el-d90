@@ -6,7 +6,7 @@ const { createHash, randomUUID } = require('node:crypto');
 const kube = require('./kube.cjs');
 const previews = new Map();
 function binary() {
-  const candidates = [process.env.EL_D90_HELM, ...kube.environment().PATH.split(':').map(p => path.join(p, 'helm'))].filter(Boolean);
+  const candidates = [process.env.EL_D90_HELM, ...kube.environment().PATH.split(path.delimiter).map(p => path.join(p, process.platform==='win32'?'helm.exe':'helm'))].filter(Boolean);
   for (const p of candidates) { try { fs.accessSync(p, fs.constants.X_OK); return p; } catch {} }
   throw new Error('Helm was not found. Install Helm or set EL_D90_HELM to its absolute executable path.');
 }
