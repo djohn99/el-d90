@@ -8,9 +8,9 @@ An independent, local Kubernetes desktop workspace for macOS. Open multiple clus
 
 **[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
 
-[Direct DMG download for 0.5.10](https://github.com/djohn99/el-d90/releases/download/v0.5.10/el-d90-0.5.10-mac-arm64.dmg)
+[Direct DMG download for 0.5.11](https://github.com/djohn99/el-d90/releases/download/v0.5.11/el-d90-0.5.11-mac-arm64.dmg)
 
-Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.10) · [All releases](https://github.com/djohn99/el-d90/releases)
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.11) · [All releases](https://github.com/djohn99/el-d90/releases)
 
 1. Download the DMG using the link above.
 2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
@@ -35,10 +35,10 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
-To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.10/el-d90-0.5.10-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.11/el-d90-0.5.11-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
 
 ```sh
-shasum -a 256 -c el-d90-0.5.10-mac-arm64.dmg.sha256
+shasum -a 256 -c el-d90-0.5.11-mac-arm64.dmg.sha256
 ```
 
 ## Screenshots
@@ -53,9 +53,9 @@ Deployment inspection with combined replica logs:
 
 *Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
 
-## New in 0.5.10
+## New in 0.5.11
 
-**0.5.10** fixes AWS SSO browser sign-in for official regional `signin.aws` approval pages, supports approval redirects across AWS regions, and clarifies the separate SSO and EKS region settings. See the [complete release notes](docs/releases/0.5.10.md).
+**0.5.11** fixes AWS SSO browser sign-in for official regional `signin.aws` approval pages, supports approval redirects across AWS regions, and clarifies the separate SSO and EKS region settings. See the [complete release notes](docs/releases/0.5.11.md).
 
 Sidebar sections collapse and remember their state. Extra tools including Resource map, Metrics, Troubleshooting, Applications and Node sessions are available under **File → Workspace tools**. Custom Resources contains Definitions and searchable API groups directly.
 
@@ -78,7 +78,7 @@ To discover your assignments, choose **Sign in & discover roles**. The app pre-f
 
 Use your organization’s **IAM Identity Center region** for **SSO region**; it can differ from the cluster’s **EKS region**. Changing SSO region starts a fresh sign-in for that region. The browser approval page may use an official AWS sign-in domain in another region; this does not change your selected SSO or EKS region. Approval links must use HTTPS, with no embedded credentials or nonstandard port.
 
-**AWS proxy troubleshooting:** Finder launches import exported proxy/CA/config paths and resolve the AWS executable from the login shell. In **AWS executable & proxy settings**, optional per-Mac overrides apply to CLI discovery and EKS token environments. Blank fields use automatic settings; re-add the EKS connection after changing its executable. **Check AWS connection** reports sanitized checks without identity payloads or proxy credentials. TLS verification stays enabled. A company proxy may require its trusted CA bundle. The affected second-Mac connection remains to be verified by its user.
+**AWS proxy troubleshooting:** Finder launches import exported proxy/CA/config paths and resolve the AWS executable from the login shell. In **AWS connection settings · automatic + overrides**, refresh Terminal settings without restarting. Each field shows its source; optional per-Mac overrides take precedence independently. Clearing an override restores automatic settings for that field, and **Use automatic settings for all fields** clears the form (save to apply). Blank fields use automatic settings; re-add the EKS connection after changing its executable. **Check AWS connection** reports sanitized checks without identity payloads or proxy credentials. TLS verification stays enabled. A company proxy may require its trusted CA bundle. The affected second-Mac connection remains to be verified by its user.
 
 The advanced **Set up a new SSO profile** form remains available for manual setup. Existing profile names and the default profile are never overwritten; configuration changes create a private backup. Existing non-SSO profiles may load EKS clusters using their configured credentials. New EKS kubeconfigs are stored privately in the app profile and loaded immediately; your global kubeconfig/current-context is unchanged. EKS discovery and Kubernetes access depend on the selected role’s existing permissions. See [AWS SSO configuration](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html).
 
@@ -243,7 +243,7 @@ The current local release uses an ad-hoc integrity signature, not a Developer ID
 
 A source review identified and remediated a low-severity historical CSV formula issue. Historical and table exports share formula-prefix neutralization while preserving finite numeric samples. Secret list responses expose only identity metadata, type and key names; full Secret YAML requires confirmation. These controls are not a universal guarantee that Helm manifests, release values, logs or operator-entered content contain no sensitive data.
 
-The 0.5.10 dependency fix resolves the seven previously reported package entries; npm audit now returns zero advisories, and the shipped editor is rebuilt with DOMPurify 3.4.17. See [the current review](docs/qa-review-2026-11-09.md) for scope and release follow-up. Report security concerns through the repository’s private security reporting channel when available; do not publish credentials or cluster details.
+The 0.5.11 dependency fix resolves the seven previously reported package entries; npm audit now returns zero advisories, and the shipped editor is rebuilt with DOMPurify 3.4.17. See [the current review](docs/qa-review-2026-11-09.md) for scope and release follow-up. Report security concerns through the repository’s private security reporting channel when available; do not publish credentials or cluster details.
 
 See [PROVENANCE.md](PROVENANCE.md) for the bounded source/asset comparison and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency licenses. Local reverse-engineering evidence, live environment records, dependencies, compiled helpers and release outputs are excluded from Git.
 
@@ -259,7 +259,7 @@ Download official builds from [this repository’s Releases](https://github.com/
 
 ## Automated releases
 
-Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.10` for version `0.5.10`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+Pushing a `v*` version tag triggers [Apple Silicon DMG release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.11` for version `0.5.11`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes the DMG and SHA-256 checksum. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
 
 After committing your next changes:
 
@@ -273,4 +273,4 @@ The workflow uses GitHub’s temporary `GITHUB_TOKEN`; no personal access token 
 
 ## Windows x64
 
-Windows support is in development. Version 0.5.10 publishes only the Apple Silicon DMG; a Windows download will follow after native acceptance tests pass.
+Windows support is in development. Version 0.5.11 publishes only the Apple Silicon DMG; a Windows download will follow after native acceptance tests pass.

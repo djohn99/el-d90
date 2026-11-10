@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.11] - 2026-11-10
+
+- Restore visible AWS connection settings with automatic Terminal settings and independent manual overrides.
+- Refresh automatic settings without restarting or clearing manual overrides and unsaved edits; show each field’s settings source.
+- Normalize uppercase/lowercase proxy variables, tolerate shell startup output, and retain prior automatic settings if refresh fails.
+- Add regression coverage for mixed automatic/manual settings and the connection settings UI.
+
 ## [0.5.10] - 2026-11-10
 
 - Resolve the seven dependency-advisory package entries, rebuild Monaco from ESM with the patched DOMPurify3.4.17, and gate releases on zero npm advisories.

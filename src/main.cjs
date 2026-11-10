@@ -126,6 +126,7 @@ handle('editor:form-write',forms.write);
 handle('editor:diagnostics',editor.diagnostics);
 for(const [channel,method] of Object.entries({'aws:sso-reopen':'reopen','aws:sso-portals':'portals','aws:sso-start':'start','aws:sso-status':'status','aws:sso-cancel':'cancel','aws:sso-roles':'roles','aws:sso-select':'select'}))handle(channel,input=>ssoDiscovery[method](input));
 handle('aws:diagnostics',input=>awsConnections.diagnostics(input));
+handle('aws:network-refresh',async()=>{const result=await require('./runtime-environment.cjs').refresh();awsConnections.close();kube.api.close();return result;});
 handle('aws:network-get',()=>require('./runtime-environment.cjs').settings());
 handle('aws:network-save',async input=>{const result=await require('./runtime-environment.cjs').save(input);awsConnections.close();kube.api.close();return result;});
 handle('aws:profiles',()=>awsConnections.profiles());
