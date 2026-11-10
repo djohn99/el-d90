@@ -7,4 +7,6 @@ function findExecutable(name,env=process.env,platform=process.platform){
  return null;
 }
 const ptyName=()=>process.platform==='win32'?'el-d90-pty.exe':'el-d90-pty';
-module.exports={findExecutable,ptyName};
+const ptyStdio=()=>process.platform==='win32'?['overlapped','overlapped','overlapped']:['pipe','pipe','pipe','pipe'];
+function resizePty(child,cols,rows,platform=process.platform){return platform==='win32'?child.stdin.write(`\x1eELD90:${cols}:${rows}\n`):child.stdio[3].write(`${cols} ${rows}\n`);}
+module.exports={findExecutable,ptyName,ptyStdio,resizePty};

@@ -78,7 +78,7 @@ function startStream(args, type, event, context, options={}) {
   const helper = app.isPackaged ? path.join(process.resourcesPath,'app.asar.unpacked/assets',require('./platform.cjs').ptyName()) : path.join(__dirname,'../assets',require('./platform.cjs').ptyName());
   const command = type === 'terminal' ? helper : kube.executable();
   const argv = type === 'terminal' ? [options.command || kube.executable(), ...args] : args;
-  const child = spawn(command, argv, { shell: false, detached: true, env: { ...kube.environment(), TERM: 'xterm-256color', COLUMNS: '100', LINES: '28' }, stdio: type === 'terminal' ? ['pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(command, argv, { shell: false, detached: true, env: { ...kube.environment(), TERM: 'xterm-256color', COLUMNS: '100', LINES: '28' }, stdio: type === 'terminal' ? require('./platform.cjs').ptyStdio() : ['pipe', 'pipe', 'pipe'] });
   streams.set(id, { child, type, context,cleanup:options.cleanup,metadata:options.metadata });
   function send(data, ended = false) { if (!event.sender.isDestroyed()) event.sender.send('stream:data', { id, type, data, ended, context }); }
   child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
@@ -86,7 +86,7 @@ function startStream(args, type, event, context, options={}) {
   child.stderr.on('data', text => send(text));
   child.on('error', e => { send(e.message, true); streams.delete(id); });
   child.on('close', code => { if(options.cleanup)options.cleanup().catch(()=>{});send(`\r\n[${type} ended${code ? `, exit ${code}` : ''}]\r\n`, true); streams.delete(id); });
-  child.stdin.on('error', () => {});if(type==='terminal')child.stdio[3].on('error',()=>{});
+  child.stdin.on('error', () => {});if(type==='terminal')child.stdio[3]?.on('error',()=>{});
   return id;
 }
 handle('read:cancel',readRequests.cancel);
@@ -244,7 +244,7 @@ handle('logs:start', (input,event)=>{
 handle('terminal:start', (input, event) => startStream(kube.terminalArgs(input), 'terminal', event, input.context));
 handle('workspace:close', async input => {watches.closeContext(input.context);kube.api.closeContext(input.context);if([...nodePending.values()].some(v=>v.context===input.context))throw new Error('Wait for the pending node session to finish before disconnecting this cluster');await sessions.closeContext(input.context);for (const [id,s] of streams) if (s.context === input.context)await stop(id); for (const item of forwards.list()) if (item.context === input.context) forwards.stop(item.id); return true; });
 handle('stream:stop', async input => {await stop(input.id);return true;});
-handle('terminal:resize', input=>{const stream=streams.get(input.id);if(!stream || stream.type!=='terminal')return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw new Error('Invalid terminal dimensions');if(process.platform==='win32')stream.child.stdin.write(`\x1eELD90:${input.cols}:${input.rows}\n`);else stream.child.stdio[3].write(`${input.cols} ${input.rows}\n`);return true;});
+handle('terminal:resize', input=>{const stream=streams.get(input.id);if(!stream || stream.type!=='terminal')return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw new Error('Invalid terminal dimensions');require('./platform.cjs').resizePty(stream.child,input.cols,input.rows);return true;});
 handle('terminal:write', input => {
   const stream = streams.get(input.id);
   if (!stream || stream.type !== 'terminal') return false;

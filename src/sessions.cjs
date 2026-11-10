@@ -9,11 +9,11 @@ class Sessions{
  _finish(e,message,state='ended'){if(e.closed)return e.finished;e.closed=true;e.state=state;this._send(e,message,true);e.finished=Promise.resolve().then(()=>e.cleanup?.()).catch(error=>{e.state='error';this._send(e,'\r\nSession cleanup failed: '+error.message+'\r\n',true);});return e.finished;}
  _spawn(e,command,args,options={}){
   if(e.closed)throw Error('Session was cancelled');
-  const child=(this.options.spawn||spawn)(this.options.helper,[command,...args],{shell:false,detached:true,cwd:options.cwd,env:{...(options.env||kube.environment()),TERM:'xterm-256color',COLUMNS:'100',LINES:'28'},stdio:['pipe','pipe','pipe','pipe']});e.child=child;e.state='running';
+  const child=(this.options.spawn||spawn)(this.options.helper,[command,...args],{shell:false,detached:true,cwd:options.cwd,env:{...(options.env||kube.environment()),TERM:'xterm-256color',COLUMNS:'100',LINES:'28'},stdio:require('./platform.cjs').ptyStdio()});e.child=child;e.state='running';
   child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');for(const output of [child.stdout,child.stderr])output.on('data',data=>{if(!e.closed)this._send(e,data);});
   child.on('error',error=>this._finish(e,'\r\n'+error.message+'\r\n','error'));
   child.on('close',code=>this._finish(e,`\r\n[Session ended${code?', exit '+code:''}]\r\n`,code?'error':'ended'));
-  child.stdin.on('error',()=>{});child.stdio[3].on('error',()=>{});this._send(e);return{id:e.id};
+  child.stdin.on('error',()=>{});child.stdio[3]?.on('error',()=>{});this._send(e);return{id:e.id};
  }
  async terminal(input){
   const transport=input.resource==='pods'?'pod':'local';if(input.resource&&input.resource!=='pods')throw Error('Use a Pod or a general cluster terminal');
@@ -27,7 +27,7 @@ class Sessions{
  list(context){if(context)kube.string(context,'context');return[...this.entries.values()].filter(e=>!context||e.context===context).map(e=>this._public(e));}
  snapshot(id){const e=this.entries.get(id);if(!e)throw Error('Session is closed');return{...this._public(e),buffer:e.buffer,seq:e.seq};}
  write(input){const e=this.entries.get(input.id);if(!e||e.closed||e.type!=='terminal'||!e.child)return false;if(typeof input.data!=='string'||Buffer.byteLength(input.data)>65536)throw Error('Terminal input exceeds 64 KB');return e.child.stdin.write(input.data);}
- resize(input){const e=this.entries.get(input.id);if(!e||e.closed||e.type!=='terminal'||!e.child)return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw Error('Invalid terminal dimensions');return e.child.stdio[3].write(`${input.cols} ${input.rows}\n`);}
+ resize(input){const e=this.entries.get(input.id);if(!e||e.closed||e.type!=='terminal'||!e.child)return false;if(!Number.isInteger(input.cols)||input.cols<20||input.cols>400||!Number.isInteger(input.rows)||input.rows<5||input.rows>200)throw Error('Invalid terminal dimensions');return require('./platform.cjs').resizePty(e.child,input.cols,input.rows);}
  async close(id){const e=this.entries.get(id);if(!e)return;if(e.preparing&&!e.child&&!e.closed){e.closed=true;e.state='ended';try{const prepared=await e.preparing;await prepared.cleanup();}catch{}this.entries.delete(id);return;}if(e.controller){e.controller.stop();await this._finish(e,'\n[Session closed]\n');}else if(e.child&&!e.closed){await new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);resolve();};e.child.once('close',finish);const timer=setTimeout(()=>{try{process.kill(-e.child.pid,'SIGKILL');}catch{}finish();},1500);try{process.kill(-e.child.pid,'SIGTERM');}catch{e.child.kill();}});await this._finish(e,'\r\n[Session closed]\r\n');}else await this._finish(e,'\n[Session closed]\n');await e.finished;this.entries.delete(id);}
  async closeContext(context){await Promise.all([...this.entries.values()].filter(e=>e.context===context).map(e=>this.close(e.id)));}
  async closeAll(){await Promise.all([...this.entries.keys()].map(id=>this.close(id)));}
