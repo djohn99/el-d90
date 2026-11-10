@@ -216,7 +216,7 @@ npm test
 npm run test:desktop-all
 ```
 
-The backend suite has 250 checks. Twenty-eight desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal, selected-session closure and terminal scrollback search. The search suite covers in-editor placement, match navigation, rich/comparison search, logs, values/settings editors, rendered pages and read-only content preservation. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
+The backend suite has 251 checks. Twenty-eight desktop suites use isolated profiles and offline CLI/HTTP fixtures. They cover resources/YAML, concurrent workspaces, Helm/history, node access/resource creation, Events, scaling, independent sessions, display/map settings, smart palettes, resource column pickers and cluster/workload metrics charts. The session suite also checks drag/keyboard resizing, panel dismissal, selected-session closure and terminal scrollback search. The search suite covers in-editor placement, match navigation, rich/comparison search, logs, values/settings editors, rendered pages and read-only content preservation. Workspace-tool checks cover troubleshooting evidence, saved views, metadata search across clusters, safe log filtering, chart hover/zoom/PNG export, 10,000-row pagination, full-list sorting, complete CSV exports, backend read-only enforcement, permission checks, redacted history and update/setup checks.
 
 To test an existing package, set `EL_D90_APP_EXECUTABLE` to its executable path. Automated tests do not require real cluster credentials. Live node SSH, privileged debug and Helm mutations are not established by fixture tests.
 
@@ -273,4 +273,4 @@ The workflow uses GitHub’s temporary `GITHUB_TOKEN`; no personal access token 
 
 ## Windows x64
 
-Windows support is in development. Version 0.5.11 publishes only the Apple Silicon DMG; a Windows download will follow after native acceptance tests pass.
+A portable Windows x64 build now passes native packaged acceptance on GitHub Actions. The Windows transport uses Microsoft’s MIT-licensed `node-pty` with bundled ConPTY support. See [Windows build and test instructions](docs/windows-build.md). Published release 0.5.11 still contains the Apple Silicon DMG only; the verified Windows candidate is available as an Actions artifact until a Windows release is published.
