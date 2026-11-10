@@ -1,4 +1,4 @@
-name: Apple Silicon DMG release
+name: macOS and Windows release
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       test_windows:
-        description: Run experimental Windows validation (not published)
+        description: Run Windows-only validation (not published)
         type: boolean
         default: false
 
@@ -104,7 +104,7 @@ jobs:
           retention-days: 14
 
   windows:
-    if: github.event_name == 'workflow_dispatch' && inputs.test_windows
+    if: github.event_name == 'push' || inputs.test_windows
     name: Build and verify Windows x64
     runs-on: windows-latest
     timeout-minutes: 30
@@ -170,7 +170,7 @@ jobs:
   publish:
     name: Publish GitHub release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [build]
+    needs: [build, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -180,7 +180,11 @@ jobs:
         with:
           name: ${{ needs.build.outputs.artifact }}
           path: release-files
-      - name: Publish installer and checksum
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: el-d90-${{ needs.build.outputs.version }}-windows-x64
+          path: release-files
+      - name: Publish installers and checksums
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -192,6 +196,7 @@ jobs:
           set -euo pipefail
           cd release-files
           shasum -a 256 -c "el-d90-${VERSION}-mac-arm64.dmg.sha256"
+          shasum -a 256 -c "el-d90-${VERSION}-windows-x64.zip.sha256"
           if gh release view "$TAG" --json isDraft > existing-release.json 2>/dev/null; then
             if ! jq -e '.isDraft == true' existing-release.json >/dev/null; then
               echo 'This tag already has a published release; refusing to replace its assets.' >&2
@@ -200,7 +205,7 @@ jobs:
           else
             gh release create "$TAG" --verify-tag --draft --title "el-d90 ${VERSION}" --notes-file RELEASE_NOTES.md
           fi
-          gh release upload "$TAG" "el-d90-${VERSION}-mac-arm64.dmg" "el-d90-${VERSION}-mac-arm64.dmg.sha256" --clobber
+          gh release upload "$TAG" "el-d90-${VERSION}-mac-arm64.dmg" "el-d90-${VERSION}-mac-arm64.dmg.sha256" "el-d90-${VERSION}-windows-x64.zip" "el-d90-${VERSION}-windows-x64.zip.sha256" --clobber
           if [ "$PRERELEASE" = true ]; then
             gh release edit "$TAG" --draft=false --prerelease --latest=false
           else
