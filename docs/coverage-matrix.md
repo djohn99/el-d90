@@ -19,7 +19,7 @@ Reviewed 2026-11-10 for the 0.5.12 candidate, including the Windows build fix. T
 | Map, Projects and GitOps | Bounded topology map, multi-context Projects, read-only Argo/Flux information | Declared relationships do not prove live traffic. GitOps reconcile/sync mutations are not implemented. |
 | Extensions | Declarative reviewed manifests, resource pages/details/columns/relations | Arbitrary third-party executable plugin compatibility is intentionally not provided. |
 | Node access | Kubernetes shell/debug and advanced SSH workflow | Live privileged debug was declined; successful real SSH/debug sessions are not certified by offline fixtures. |
-| Packaging | Apple Silicon DMG and tagged GitHub Actions releases with checksums | Developer ID signing/notarization is still unavailable. Manual installation/update and macOS approval remain necessary. |
+| Packaging | Apple Silicon DMG and Windows x64 portable ZIP; tagged GitHub Actions releases with checksums and build provenance | Developer ID signing/notarization and Windows Authenticode signing are unavailable. Manual installation/update and platform approval may remain necessary. |
 | AI | Disabled by the user's decision | Remains deferred. |
 
 ## Before the next release
