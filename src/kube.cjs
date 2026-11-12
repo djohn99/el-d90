@@ -109,18 +109,20 @@ function selectedNamespaces(input) {
 const LIST_VERSIONS={deployments:'apps/v1',statefulsets:'apps/v1',daemonsets:'apps/v1',replicasets:'apps/v1',jobs:'batch/v1',cronjobs:'batch/v1',horizontalpodautoscalers:'autoscaling/v2',poddisruptionbudgets:'policy/v1',ingresses:'networking.k8s.io/v1',networkpolicies:'networking.k8s.io/v1',endpointslices:'discovery.k8s.io/v1',storageclasses:'storage.k8s.io/v1',roles:'rbac.authorization.k8s.io/v1',rolebindings:'rbac.authorization.k8s.io/v1',clusterroles:'rbac.authorization.k8s.io/v1',clusterrolebindings:'rbac.authorization.k8s.io/v1',customresourcedefinitions:'apiextensions.k8s.io/v1'};
 function listPath(input,kind){const def=definition(kind,input.context),apiVersion=def?.apiVersion||LIST_VERSIONS[kind]||'v1';if(!/^[a-zA-Z0-9.-]+(?:\/[a-zA-Z0-9]+)?$/.test(apiVersion))throw Error('Invalid discovered API version');const base=apiVersion.includes('/')?'/apis/'+apiVersion:'/api/'+apiVersion;return base+(def.namespaced&&input.namespace&&input.namespace!=='*'?'/namespaces/'+encodeURIComponent(name(input.namespace,'namespace')):'')+'/'+kind.split('.')[0];}
 function listObject(item,kind){if(kind==='secrets'||kind.startsWith('secrets.'))return{apiVersion:item.apiVersion,kind:item.kind,type:item.type,metadata:Object.fromEntries(['name','namespace','uid','creationTimestamp'].filter(key=>typeof item.metadata?.[key]==='string').map(key=>[key,item.metadata[key]])),dataKeys:Object.keys(item.data||{})};if(item.metadata)delete item.metadata.managedFields;return item;}
-async function pagedList(input,kind,request=run){
+async function pagedList(input,kind){
+ const context=string(input.context,'context'), direct=api.enabled();
+
  const endpoint=listPath(input,kind),items=[],seen=new Set();let token='',limit=100,bytes=0,pages=0,resourceVersion;
  do{
   const pageStart=items.length,query=new URLSearchParams({limit:String(limit)});if(kind==='pods'&&input.nodeName)query.set('fieldSelector','spec.nodeName='+name(input.nodeName,'node name'));if(token)query.set('continue',token);let page;
-  try{page=JSON.parse(await request(['get','--raw',endpoint+'?'+query,'--context',string(input.context,'context'),'--request-timeout=20s']));}catch(e){if(/Response exceeds 24 MB/.test(e.message)&&limit>1){limit=Math.max(1,Math.floor(limit/5));continue;}throw e;}
+  try{const url=endpoint+'?'+query;page=direct?await api.get(context,url,{signal:readRequests.signal()}):JSON.parse(await run(['get','--raw',url,'--context',context,'--request-timeout=20s']));}catch(e){if(/Response exceeds 24 MB/.test(e.message)&&limit>1){limit=Math.max(1,Math.floor(limit/5));continue;}throw e;}
   resourceVersion=page.metadata?.resourceVersion||resourceVersion;if(!Array.isArray(page.items))throw Error('Kubernetes returned an invalid resource page');
   for(const raw of page.items){const item={apiVersion:page.apiVersion||definition(kind,input.context)?.apiVersion||LIST_VERSIONS[kind]||'v1',kind:definition(kind,input.context)?.kind||(page.kind?.endsWith('List')?page.kind.slice(0,-4):undefined),...raw};const value=(kind==='secrets'||kind.startsWith('secrets.'))?item:listObject(item,kind);bytes+=Buffer.byteLength(JSON.stringify(value));if(bytes>128*1024*1024||items.length>=50000)throw Error('Resource list exceeds 128 MiB or 50,000 resources. Select namespaces to reduce the list.');items.push(value);}
   if(input.onPage)input.onPage(items.slice(pageStart).map(item=>listObject(item,kind)));
   token=page.metadata?.continue||'';if(typeof token!=='string'||token.length>65536)throw Error('Invalid Kubernetes continuation token');if(token&&seen.has(token))throw Error('Kubernetes repeated a resource continuation token');seen.add(token);if(++pages>10000)throw Error('Resource pagination exceeded 10,000 pages. Select namespaces to reduce the list.');if(!token)break;
  }while(true);return{items,metadata:{resourceVersion}};
 }
-async function listScope(input,kind){if(api.enabled())return pagedList(input,kind,async args=>JSON.stringify(await api.get(input.context,args[2],{signal:readRequests.signal()})));try{return JSON.parse(await run(['get',kind,...scope(input,kind),'-o','json']));}catch(e){if(!/Response exceeds 24 MB/.test(e.message))throw e;return pagedList(input,kind);}}
+async function listScope(input,kind){if(api.enabled())return pagedList(input,kind);try{return JSON.parse(await run(['get',kind,...scope(input,kind),'-o','json']));}catch(e){if(!/Response exceeds 24 MB/.test(e.message))throw e;return pagedList(input,kind);}}
 async function list(input) {
   const kind = resource(input.resource, input.context);
   const namespaces = selectedNamespaces(input);

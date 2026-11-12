@@ -12,3 +12,28 @@ test('API watch adapter relists after 410, pauses on 403 and never exposes event
 
 test('relative exec commands resolve against the source kubeconfig directory',async()=>fixture(async({api,dir,file,requests})=>{const plugin=path.join(dir,'relative-plugin');await fs.writeFile(plugin,'#!'+process.execPath+'\nconsole.log(JSON.stringify({apiVersion:"client.authentication.k8s.io/v1beta1",kind:"ExecCredential",status:{token:"relative-exec-fixture"}}));',{mode:0o755});const config=YAML.parse(await fs.readFile(file,'utf8'));config.users[0].user={exec:{apiVersion:'client.authentication.k8s.io/v1beta1',command:'./relative-plugin'}};await fs.writeFile(file,YAML.stringify(config));await api.get('admin','/api/v1/pods');assert.equal(requests.at(-1).auth,'Bearer relative-exec-fixture');}));
 test('tokenFile is resolved against kubeconfig, re-read after rotation and never silently becomes anonymous',async()=>fixture(async({api,dir,file,requests})=>{const token=path.join(dir,'bearer-token');await fs.writeFile(token,'file-token-one\n');const config=YAML.parse(await fs.readFile(file,'utf8'));config.users[0].user={tokenFile:'bearer-token'};await fs.writeFile(file,YAML.stringify(config));await api.get('admin','/api/v1/pods');assert.equal(requests.at(-1).auth,'Bearer file-token-one');await fs.writeFile(token,'file-token-two\n');await api.get('admin','/api/v1/pods');assert.equal(requests.at(-1).auth,'Bearer file-token-two');await fs.rm(token);await assert.rejects(api.get('admin','/api/v1/pods'),/credential provider failed/);assert.equal(requests.length,2);}));
+
+test('compressed Kubernetes reads share a connection and enforce the decoded byte limit',async()=>fixture(async({api,server,sockets,file})=>{
+  const {gzipSync}=require('node:zlib');
+  const small=gzipSync(JSON.stringify({items:[]}));
+  const oversized=gzipSync(Buffer.alloc(24*1024*1024+1,32));
+  const encodings=[];
+  server.removeAllListeners('request');
+  server.on('request',(req,res)=>{
+    sockets.add(req.socket);
+    encodings.push(req.headers['accept-encoding']);
+    if(req.headers['accept-encoding']==='gzip'){
+      res.setHeader('Content-Encoding','gzip');
+      res.end(req.url.includes('oversized')?oversized:small);
+    }else res.end('{"items":[]}');
+  });
+  assert.deepEqual(await api.get('admin','/api/v1/pods'),{items:[]});
+  assert.deepEqual(await api.get('admin','/apis/apps/v1/deployments'),{items:[]});
+  assert.equal(sockets.size,1);
+  await assert.rejects(api.get('admin','/oversized'),/exceeds 24 MB/);
+  const config=YAML.parse(await fs.readFile(file,'utf8'));
+  config.clusters[0].cluster['disable-compression']=true;
+  await fs.writeFile(file,YAML.stringify(config));
+  assert.deepEqual(await api.get('admin','/api/v1/pods'),{items:[]});
+  assert.deepEqual(encodings,['gzip','gzip','gzip',undefined]);
+}));

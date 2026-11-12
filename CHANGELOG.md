@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.17] - 2026-11-12
+
+- Request compressed Kubernetes API responses to reduce transfer size for large lists.
+- Remove redundant JSON serialization during pagination and retain decoded response limits.
+
 ## [0.5.16] - 2026-11-12
 
 - Package the AWS account picker improvements for both platforms through GitHub Actions.
