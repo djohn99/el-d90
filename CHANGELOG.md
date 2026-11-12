@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.16] - 2026-11-12
+
+- Package the AWS account picker improvements for both platforms through GitHub Actions.
+
 ## [0.5.15] - 2026-11-12
 
 - Show readable AWS account labels and badges for recognized environments. Keep original AWS names and account IDs searchable.
