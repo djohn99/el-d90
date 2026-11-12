@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.14] - 2026-11-12
+
+- Start cluster setup with a choice between AWS SSO and kubeconfig import. Keep saved AWS profiles and diagnostics available in collapsible sections. (#15)
+- Guide AWS SSO users through sign-in, account, role and cluster selection with clear progress and recovery feedback. (#14)
+- Open account, role and namespace pickers over the form, with search and keyboard navigation. (#13)
+
 ## [0.5.13] - 2026-11-10
 
 - Remove demo workspace buttons from packaged macOS and Windows apps while retaining local development demos.

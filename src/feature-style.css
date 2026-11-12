@@ -4,3 +4,83 @@
 #aws-connections{margin:22px 0;padding:20px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}#aws-connections h2{font-size:20px;font-weight:650}#aws-connections p{margin:10px 0;font-size:12px}.aws-connect-fields{display:flex;gap:14px;align-items:end;flex-wrap:wrap;margin:16px 0}.aws-connect-fields label{display:flex;flex:1 1 200px;flex-direction:column;gap:7px;color:var(--muted);font-size:12px}.aws-connect-fields input,.aws-connect-fields select{padding:9px;width:100%;max-width:none}.aws-connect-actions{display:flex;gap:8px;flex-wrap:wrap}#aws-status{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;min-height:20px}#aws-sso-setup{margin-top:18px;border-top:1px solid var(--line);padding-top:16px}#aws-sso-setup>summary{cursor:pointer;font-weight:600}
 
 .sso-picker{flex:1 1 260px;min-width:0}.sso-picker h4{margin:0 0 8px;font-size:12px;color:var(--muted)}.sso-choice-list{max-height:230px;overflow:auto;display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}.sso-choice{padding:10px 12px;text-align:left;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:5px;font:inherit;overflow-wrap:anywhere;cursor:pointer}.sso-choice:hover,.sso-choice:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:-2px}.sso-choice[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--panel));font-weight:700}
+
+.connection-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0 20px;
+}
+.connection-methods [aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+}
+#aws-connections[hidden], #kube-connection[hidden], #sso-settings[hidden] {
+  display: none;
+}
+#aws-connections h2 { font-size: 26px; }
+#aws-connections h3 { font-size: 16px; font-weight: 700; margin: 0 0 12px; }
+#aws-connections small { display: block; color: var(--muted); font-size: 12px; }
+#aws-connections small:empty { display: none; }
+#sso-summary { color: var(--text); overflow-wrap: anywhere; }
+#sso-status { margin-bottom: 0; }
+#sso-portal-summary { overflow-wrap: anywhere; }
+#sso-configured { margin-bottom: 12px; }
+.aws-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+}
+.aws-steps li { display: flex; align-items: center; gap: 6px; }
+.aws-steps li::before { content: "○"; }
+.aws-steps .complete::before { content: "✓"; }
+.aws-steps [aria-current="step"] { color: var(--accent); font-weight: 700; }
+.aws-steps [aria-current="step"]::before { content: "●"; }
+.aws-assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.aws-step-card, .aws-cluster-stage {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  min-width: 0;
+}
+.aws-cluster-stage { margin: 12px 0; }
+.aws-cluster-stage .aws-connect-actions { align-items: end; }
+.aws-cluster-stage .aws-connect-actions label { display: grid; gap: 6px; }
+.connection-picker { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.connection-picker::after { content: " ▾"; }
+.aws-step-card > small, #aws-namespace-status { margin-top: 6px; }
+#aws-connections .connection-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 8px;
+  overflow: auto;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+}
+#aws-connections .connection-popover:not(:popover-open) { display: none; }
+#aws-connections .connection-popover input { width: 100%; }
+.connection-popover > .sso-choice-list { max-height: none; overflow: visible; }
+.connection-popover .sso-choice { display: flex; gap: 8px; align-items: baseline; }
+.connection-popover .sso-choice[aria-pressed="true"] {
+  border-inline-start: 4px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 27%, var(--panel));
+}
+.sso-check { visibility: hidden; color: var(--accent); }
+.sso-choice[aria-pressed="true"] .sso-check { visibility: visible; }
+
+@media (max-width: 640px) {
+  .aws-assignment-grid { grid-template-columns: minmax(0, 1fr); }
+}

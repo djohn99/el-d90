@@ -8,13 +8,13 @@ An independent, local Kubernetes desktop workspace for macOS and Windows. Open m
 
 **[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
 
-[Direct DMG download for 0.5.13](https://github.com/djohn99/el-d90/releases/download/v0.5.13/el-d90-0.5.13-mac-arm64.dmg)
+[Direct DMG download for 0.5.14](https://github.com/djohn99/el-d90/releases/download/v0.5.14/el-d90-0.5.14-mac-arm64.dmg)
 
-[Direct Windows x64 ZIP download](https://github.com/djohn99/el-d90/releases/download/v0.5.13/el-d90-0.5.13-windows-x64.zip) · [Windows installation](#windows-x64)
+[Direct Windows x64 ZIP download](https://github.com/djohn99/el-d90/releases/download/v0.5.14/el-d90-0.5.14-windows-x64.zip) · [Windows installation](#windows-x64)
 
 Both downloads are public and require no GitHub sign-in.
 
-Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.13) · [All releases](https://github.com/djohn99/el-d90/releases)
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.14) · [All releases](https://github.com/djohn99/el-d90/releases)
 
 1. Download the DMG using the link above.
 2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
@@ -39,10 +39,10 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
-To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.13/el-d90-0.5.13-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.14/el-d90-0.5.14-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
 
 ```sh
-shasum -a 256 -c el-d90-0.5.13-mac-arm64.dmg.sha256
+shasum -a 256 -c el-d90-0.5.14-mac-arm64.dmg.sha256
 ```
 
 ## Screenshots
@@ -57,9 +57,9 @@ Deployment inspection with combined replica logs:
 
 *Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
 
-## New in 0.5.13
+## New in 0.5.14
 
-**0.5.13** removes the demo workspace buttons from packaged macOS and Windows apps. Demo controls remain available when running locally from source. Both installers are public downloads without GitHub sign-in. See the [complete release notes](docs/releases/0.5.13.md).
+**0.5.14** simplifies cluster setup with separate AWS SSO and kubeconfig paths, a guided AWS sign-in flow, and searchable dropdowns that float over the form. See the [complete release notes](docs/releases/0.5.14.md).
 
 Sidebar sections collapse and remember their state. Extra tools including Resource map, Metrics, Troubleshooting, Applications and Node sessions are available under **File → Workspace tools**. Custom Resources contains Definitions and searchable API groups directly.
 
@@ -263,7 +263,7 @@ Download official builds from [this repository’s Releases](https://github.com/
 
 ## Automated releases
 
-Pushing a `v*` version tag triggers [macOS and Windows release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.13` for version `0.5.13`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes both the DMG and Windows portable ZIP with SHA-256 checksums after both native build jobs pass. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+Pushing a `v*` version tag triggers [macOS and Windows release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.14` for version `0.5.14`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes both the DMG and Windows portable ZIP with SHA-256 checksums after both native build jobs pass. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
 
 After committing your next changes:
 
@@ -277,6 +277,6 @@ The workflow uses GitHub’s temporary `GITHUB_TOKEN`; no personal access token 
 
 ## Windows x64
 
-Download the [Windows x64 portable ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.13/el-d90-0.5.13-windows-x64.zip) without signing in. Extract the **entire ZIP** into a folder you own, then open **el-d90.exe**. Requires Windows 10 1809+ or Windows 11 on Intel/AMD x64.
+Download the [Windows x64 portable ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.14/el-d90-0.5.14-windows-x64.zip) without signing in. Extract the **entire ZIP** into a folder you own, then open **el-d90.exe**. Requires Windows 10 1809+ or Windows 11 on Intel/AMD x64.
 
 Install kubectl.exe, AWS CLI v2 and Helm as needed on PATH; restart el-d90 afterward. The app is not Authenticode signed, so managed PCs may require administrator approval. See [Windows installation and validation](docs/windows-build.md).
