@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.15] - 2026-11-12
+
+- Show readable AWS account labels and badges for recognized environments. Keep original AWS names and account IDs searchable.
+- Add search icons to the AWS account, role and namespace fields.
+
 ## [0.5.14] - 2026-11-12
 
 - Start cluster setup with a choice between AWS SSO and kubeconfig import. Keep saved AWS profiles and diagnostics available in collapsible sections. (#15)

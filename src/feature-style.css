@@ -84,3 +84,56 @@
 @media (max-width: 640px) {
   .aws-assignment-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.aws-search-field {
+  position: relative;
+  display: block;
+}
+#aws-connections .aws-search-field input {
+  width: 100%;
+  padding-inline-start: 32px;
+}
+.aws-search-field input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.aws-search-icon {
+  position: absolute;
+  inset-inline-start: 11px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  transform: translateY(-65%);
+  pointer-events: none;
+}
+.aws-search-icon::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 90%;
+  width: 5px;
+  height: 1.5px;
+  background: var(--muted);
+  transform: rotate(45deg);
+  transform-origin: left center;
+}
+#aws-connections .aws-account-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.aws-environment {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+.aws-environment[data-environment="PROD"] { color: var(--red); }
+.aws-environment[data-environment="STG"] { color: var(--yellow); }

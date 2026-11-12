@@ -53,7 +53,7 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   await app.evaluate(({ipcMain})=>{
     const set=(channel,fn)=>{ipcMain.removeHandler(channel);ipcMain.handle(channel,fn);};
     set('aws:sso-start',()=>({id:'discovery-fixture',state:'running',accounts:[]}));
-    set('aws:sso-status',()=>({id:'discovery-fixture',state:'complete',message:'Signed in. Choose an account.',accounts:[{id:'123456789012',name:'Primary'},{id:'222222222222',name:'Second'}]}));
+    set('aws:sso-status',()=>({id:'discovery-fixture',state:'complete',message:'Signed in. Choose an account.',accounts:[{id:'123456789012',name:'nonprod-digitalflightshopping-stg01'},{id:'222222222222',name:'Second'}]}));
     set('aws:sso-roles',(_event,input)=>input.account==='222222222222'?new Promise(resolve=>{global.finishRoles=resolve;}):({account:input.account,roles:['AdministratorAccess','EditOnlyAccess']}));
     set('aws:sso-select',(_event,input)=>{global.selectedSSORole=input;return {profile:'legacy',account:input.account,role:input.role};});
     set('aws:clusters',()=>({clusters:['platform']}));
@@ -68,6 +68,19 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   const menu=page.locator('#sso-account-menu');
   await menu.waitFor();
   assert.deepEqual(await page.locator('.aws-cluster-stage').boundingBox(),clusterBefore);
+  const accountSearch=page.locator('#sso-account-search');
+  const formatted=page.locator('#sso-account [data-choice="123456789012"]');
+  assert.equal(await formatted.locator('strong').textContent(),'Digital Flight Shopping');
+  assert.equal(await formatted.locator('.aws-environment').textContent(),'STG');
+  assert.match(await formatted.textContent(),/123456789012/);
+  assert.match(await formatted.textContent(),/nonprod-digitalflightshopping-stg01/);
+  assert.equal(await page.locator('#sso-account [data-choice="222222222222"] .aws-environment').count(),0);
+  assert.equal(await menu.locator('.aws-search-icon').isVisible(),true);
+  for(const query of ['Digital Flight', 'nonprod-digitalflightshopping-stg01', '123456789012', 'STG']){
+    await accountSearch.fill(query);
+    assert.equal(await page.locator('#sso-account [data-choice]').count(),1);
+    assert.equal(await formatted.isVisible(),true);
+  }
   const bounds=await menu.boundingBox();
   assert.ok(bounds.x>=0&&bounds.y>=0&&bounds.y+bounds.height<=await page.evaluate(()=>innerHeight));
   await page.keyboard.press('Escape');await menu.waitFor({state:'hidden'});
@@ -79,7 +92,7 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   await menu.waitFor({state:'hidden'});
   assert.equal(await page.locator('.aws-steps [aria-current=step]').textContent(),'Select role');
   await pick('account','123456789012');await page.locator('#sso-role [data-choice=AdministratorAccess]').waitFor({state:'attached'});
-  await page.locator('#sso-account-trigger').click();await page.locator('#sso-account-search').fill('Primary');assert.equal(await page.locator('#sso-account button').count(),1);assert.equal(await page.locator('#sso-account button[aria-pressed=true]').count(),1);await page.locator('#sso-account-search').fill('');await page.locator('#sso-role-trigger').click();await menu.waitFor({state:'hidden'});await page.locator('#sso-role-search').fill('Administrator');assert.equal(await page.locator('#sso-role button').count(),1);await page.keyboard.press('Escape');
+  await page.locator('#sso-account-trigger').click();await page.locator('#sso-account-search').fill('Digital Flight');assert.equal(await page.locator('#sso-account button').count(),1);assert.equal(await page.locator('#sso-account button[aria-pressed=true]').count(),1);await page.locator('#sso-account-search').fill('');await page.locator('#sso-role-trigger').click();await menu.waitFor({state:'hidden'});assert.equal(await page.locator('#sso-role-menu .aws-search-icon').isVisible(),true);await page.locator('#sso-role-search').fill('Administrator');assert.equal(await page.locator('#sso-role button').count(),1);await page.keyboard.press('Escape');
   await app.evaluate(()=>global.finishRoles({roles:['WrongAccountRole']}));assert.equal(await page.locator('#sso-role [data-choice=WrongAccountRole]').count(),0);
   for(const role of ['AdministratorAccess','EditOnlyAccess']){await pick('role',role);await page.locator('#sso-status').filter({hasText:role+' selected'}).waitFor();assert.equal(await page.locator('.aws-steps [aria-current=step]').textContent(),'Select cluster');await page.waitForFunction(()=>!document.querySelector('#sso-use').disabled);assert.equal(await app.evaluate(()=>global.selectedSSORole.role),role);assert.equal(await page.locator('#aws-profile').inputValue(),'legacy');}
   await app.evaluate(({ipcMain})=>{global.profileReplies=[];ipcMain.removeHandler('aws:profiles');ipcMain.handle('aws:profiles',()=>new Promise(resolve=>global.profileReplies.push(resolve)));global.roleReplies=[];ipcMain.removeHandler('aws:sso-select');ipcMain.handle('aws:sso-select',(_e,input)=>new Promise(resolve=>global.roleReplies.push({input,resolve})));});
