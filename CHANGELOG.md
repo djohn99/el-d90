@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.18] - 2026-11-15
+
+- Fit resource tables to the window without horizontal scrolling, including paginated lists.
+- Make Nodes rows more compact with CPU, memory, and disk capacity bars.
+- Save relative column widths so resized columns continue to fit when the window changes size. (#17)
+
 ## [0.5.17] - 2026-11-12
 
 - Request compressed Kubernetes API responses to reduce transfer size for large lists.
