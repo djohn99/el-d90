@@ -4,14 +4,18 @@ const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpd
 await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('kube:list');ipcMain.handle('kube:list',(_e,input)=>new Promise(resolve=>{global.pageRequest={input,resolve};}));});
 await p.evaluate(()=>{navigate('pods');});await p.waitForFunction(()=>state.loading);const id=await p.evaluate(()=>state.readRequestId);await app.evaluate(({BrowserWindow},id)=>{const pods=Array.from({length:120},(_,i)=>({apiVersion:'v1',kind:'Pod',metadata:{name:'page-pod-'+String(i).padStart(3,'0'),namespace:i%2?'prod':'stg'},spec:{containers:[{name:'web'}]},status:{phase:'Running'}}));global.pagePods=pods;BrowserWindow.getAllWindows()[0].webContents.send('kube:list-page',{context:'fixture-a',requestId:id,resource:'pods',items:pods});},id);
 await p.locator('#resource-count').filter({hasText:'120 resources loaded'}).waitFor();
+await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(1080, 700));
+await p.waitForFunction(() => outerWidth === 1080);
 const layout = await p.evaluate(() => {
   const workspace = document.querySelector('main');
   const footer = document.querySelector('.content-footer');
   const table = document.querySelector('#resource-table .virtual-table-scroll');
   workspace.style.height = '1400px';
   try {
+    const bottomPadding = parseFloat(getComputedStyle(footer.parentElement).paddingBottom);
+    const usableBottom = workspace.getBoundingClientRect().top + workspace.clientHeight;
     return {
-      bottomGap: workspace.getBoundingClientRect().bottom - footer.getBoundingClientRect().bottom,
+      unusedHeight: usableBottom - footer.getBoundingClientRect().bottom - bottomPadding,
       height: table.clientHeight,
       scrolls: table.scrollHeight > table.clientHeight
     };
@@ -19,7 +23,7 @@ const layout = await p.evaluate(() => {
     workspace.style.removeProperty('height');
   }
 });
-assert.ok(layout.bottomGap <= 24, 'paginated table leaves unused workspace below the footer');
+assert.ok(layout.unusedHeight <= 2, 'paginated table leaves unused workspace below the footer: '+JSON.stringify(layout));
 assert.ok(layout.height > 560, 'table can grow beyond the old height cap');
 assert.equal(layout.scrolls, true);
 assert.equal(await p.locator('#resource-table tbody tr').count(),50);assert.ok(await p.locator('.virtual-table-scroll').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'paginated table overflowed');assert.equal(await p.locator('#resource-table .container-square').count(),50);assert.match(await p.locator('#resource-table .container-square').first().getAttribute('aria-label'),/web.*Status unavailable/);assert.equal(await p.evaluate(()=>state.loading),true);await p.getByRole('button',{name:'Next page',exact:true}).click();await p.locator('tr[aria-label="Open page-pod-050"]').waitFor();
