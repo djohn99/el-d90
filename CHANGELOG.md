@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.21] - 2026-11-16
+## [0.5.22] - 2026-11-16
 
 - Let paginated resource tables use the available workspace height, with scrolling inside the table.
 
