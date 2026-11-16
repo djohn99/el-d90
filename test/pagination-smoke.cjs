@@ -8,4 +8,35 @@ await app.evaluate(({BrowserWindow},id)=>BrowserWindow.getAllWindows()[0].webCon
 await app.evaluate(()=>global.pageRequest.resolve({items:global.pagePods}));await p.waitForFunction(()=>!state.loading);assert.equal(await p.getByRole('button',{name:'Previous page',exact:true}).isDisabled(),false);await p.getByLabel('Rows per page',{exact:true}).selectOption('100');assert.equal(await p.locator('#resource-table tbody tr').count(),100);await p.getByRole('button',{name:'Next page',exact:true}).click();assert.equal(await p.locator('#resource-table tbody tr').count(),20);assert.equal(await p.getByRole('button',{name:'Next page',exact:true}).isDisabled(),true);
 await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();await p.locator('#resource-table').getByRole('button',{name:'Namespace ↕',exact:true}).click();await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();assert.equal(await p.locator('#resource-table th[data-pod-column=name]').getAttribute('aria-sort'),'ascending');await p.evaluate(()=>filterTable());await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();assert.equal(await p.locator('#resource-table th[data-pod-column=name]').getAttribute('aria-sort'),'descending');await p.locator('tr[aria-label="Open page-pod-119"]').waitFor();
 await p.locator('#search').fill('page-pod-119');await p.locator('tr[aria-label="Open page-pod-119"]').waitFor();await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===1);await p.locator('#search').fill('');await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===100);await p.locator('tr[aria-label="Open page-pod-000"]').waitFor();await p.locator('#search').fill('page-pod-119');await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===1);await p.locator('tr[aria-label="Open page-pod-119"]').click();await p.waitForFunction(()=>state.selected.metadata.namespace==='prod');console.log('PASS: resource first paint before final API response, page size/boundaries, page retention, global search, exact Pod namespace and stale progress isolation');
+const ordering = await p.evaluate(() => {
+  const host = document.createElement('div');
+  host.id = 'sort-regression-fixture';
+  document.body.append(host);
+  try {
+    const make = (name, group) => ({
+      kind: 'Node', metadata: {name, labels: {'eks.amazonaws.com/nodegroup': group}}
+    });
+    const rows = () => [...host.querySelectorAll('tbody tr')].map(row => row.getAttribute('aria-label'));
+    renderTable(host.id, [make('alpha', 'prod'), make('beta', 'general')], 'nodes');
+    host.querySelector('th[data-node-column=group] button').click();
+    const before = rows();
+    renderTable(host.id, [make('alpha', 'aaa'), make('beta', 'zzz'), make('gamma', 'bbb')], 'nodes', Infinity, true);
+    const after = rows();
+    const sort = host.querySelector('th[data-node-column=group]').getAttribute('aria-sort');
+    const services = Array.from({length: 52}, (_, index) => ({
+      kind: 'Service', metadata: {name: 'service-'+index, namespace: index % 2 ? 'a' : 'z'}
+    }));
+    renderTable(host.id, services, 'services');
+    host.querySelector('th[data-resource-column=namespace] button').click();
+    const pagedBefore = rows();
+    renderTable(host.id, services.map(item => ({...item, metadata: {...item.metadata}})).reverse(), 'services', Infinity, true);
+    return {before, after, sort, pagedBefore, pagedAfter: rows()};
+  } finally {
+    host.remove();
+  }
+});
+assert.deepEqual(ordering.before, ['Open beta', 'Open alpha']);
+assert.deepEqual(ordering.after, ['Open beta', 'Open alpha', 'Open gamma']);
+assert.equal(ordering.sort, 'ascending');
+assert.deepEqual(ordering.pagedAfter, ordering.pagedBefore);
 }finally{await app?.close();fs.rmSync(profile,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1;});

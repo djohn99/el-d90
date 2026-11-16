@@ -2,7 +2,7 @@ window.elD90AWSConnections = { async render(host, opts) {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const current = () => host.isConnected && (!opts.isCurrent || opts.isCurrent()); let preferredProfile=/^el-d90:([^:]+):/.exec(opts.context||'')?.[1]||'';try{preferredProfile ||= opts.demo?'':localStorage.getItem('el-d90-aws-profile')||'';}catch{}
   let profiles = [], epoch = 0, job = null, timer, imported = null, connectPending=false, namespaceJob=null, namespaceEpoch=0;
-  host.innerHTML = '<h2>AWS SSO → EKS</h2><details id="aws-saved-profiles"><summary>Use a saved AWS profile</summary><div class="aws-connect-fields"><label>AWS profile<select id="aws-profile" aria-label="AWS profile"></select></label><button id="aws-profiles-reload" class="button secondary">Reload profiles</button></div><p id="aws-profile-info"></p><div class="aws-connect-actions"><button id="aws-login" class="button primary" disabled>Sign in with AWS SSO</button><button id="aws-login-cancel" class="button secondary" hidden>Cancel sign-in</button></div></details><section class="aws-cluster-stage"><h3>Select cluster</h3><div class="aws-connect-actions"><label>EKS region<input id="aws-region" aria-label="EKS region" placeholder="eu-west-1"></label><button id="aws-clusters-load" class="button secondary" disabled>Load EKS clusters</button></div><div class="aws-connect-fields"><label>EKS cluster<select id="aws-cluster" aria-label="EKS cluster" disabled><option value="">Load clusters first…</option></select></label><label>Cluster name (if not listed)<input id="aws-cluster-name" aria-label="Manual EKS cluster name" placeholder="Optional"></label><div class="sso-picker"><label>Namespace<span class="aws-search-field"><span class="aws-search-icon" aria-hidden="true"></span><input id="aws-namespace" aria-label="EKS namespace" placeholder="Search namespaces or enter a known namespace"></span></label><div id="aws-namespace-options" class="sso-choice-list connection-popover" popover="auto" role="group" aria-label="Accessible namespaces"></div><small id="aws-namespace-status">Choose a cluster to load namespaces.</small></div><button id="aws-connect" class="button primary" disabled>Connect to cluster</button><button id="aws-open" class="button secondary" hidden disabled>Open this cluster</button></div><pre id="aws-status" role="status"></pre></section><details><summary>AWS diagnostics</summary><button id="aws-diagnostics" class="button secondary" disabled>Check AWS connection</button></details><details id="aws-sso-setup"><summary>Set up a new SSO profile</summary><p>One-time setup using your organization’s AWS access portal information. This adds a named AWS CLI profile and keeps existing profiles unchanged. No password or access token is entered here.</p><div class="aws-connect-fields"><label>Profile name<input id="aws-new-profile" aria-label="New AWS profile name" placeholder="my-company-sso"></label><label>SSO start / issuer URL<input id="aws-start-url" aria-label="SSO start URL" placeholder="https://your-company.awsapps.com/start"></label><label>SSO region<input id="aws-sso-region" aria-label="SSO region" placeholder="eu-west-1"></label><label>AWS account ID<input id="aws-account" aria-label="AWS account ID" inputmode="numeric" placeholder="12 digits"></label><label>SSO role / permission-set name<input id="aws-role" aria-label="SSO role name" placeholder="Your assigned role"></label></div><button id="aws-profile-create" class="button secondary">Save named SSO profile</button><p>The EKS region above is saved as the profile’s default region. Ask your AWS administrator for portal/account/role information if needed.</p></details>';
+  host.innerHTML = '<h2>AWS SSO → EKS</h2><details id="aws-saved-profiles"><summary>Use a saved AWS profile</summary><div class="aws-connect-fields"><label>AWS profile<select id="aws-profile" aria-label="AWS profile"></select></label><button id="aws-profiles-reload" class="button secondary">Reload profiles</button></div><p id="aws-profile-info"></p><div class="aws-connect-actions"><button id="aws-login" class="button primary" disabled>Sign in with AWS SSO</button><button id="aws-login-cancel" class="button secondary" hidden>Cancel sign-in</button></div></details><section class="aws-cluster-stage"><h3>Select cluster</h3><div class="aws-connect-actions aws-region-row"><label>EKS region<input id="aws-region" aria-label="EKS region" placeholder="eu-west-1"></label><button id="aws-clusters-load" class="button secondary" disabled>Load EKS clusters</button></div><div class="aws-connect-fields aws-cluster-row"><label>EKS cluster<select id="aws-cluster" aria-label="EKS cluster" disabled><option value="">Load clusters first…</option></select></label><label>Cluster name (if not listed)<input id="aws-cluster-name" aria-label="Manual EKS cluster name" placeholder="Optional"></label><div class="sso-picker"><label>Namespace<span class="aws-search-field"><span class="aws-search-icon" aria-hidden="true"></span><input id="aws-namespace" aria-label="EKS namespace" aria-describedby="aws-namespace-status" placeholder="Search namespaces or enter a known namespace"></span></label><div id="aws-namespace-options" class="sso-choice-list connection-popover" popover="auto" role="group" aria-label="Accessible namespaces"></div></div><button id="aws-connect" class="button primary" disabled>Connect to cluster</button><button id="aws-open" class="button secondary" hidden disabled>Open this cluster</button></div><small id="aws-namespace-status">Choose a cluster to load namespaces.</small><pre id="aws-status" role="status"></pre></section><details><summary>AWS diagnostics</summary><button id="aws-diagnostics" class="button secondary" disabled>Check AWS connection</button></details><details id="aws-sso-setup"><summary>Set up a new SSO profile</summary><p>One-time setup using your organization’s AWS access portal information. This adds a named AWS CLI profile and keeps existing profiles unchanged. No password or access token is entered here.</p><div class="aws-connect-fields"><label>Profile name<input id="aws-new-profile" aria-label="New AWS profile name" placeholder="my-company-sso"></label><label>SSO start / issuer URL<input id="aws-start-url" aria-label="SSO start URL" placeholder="https://your-company.awsapps.com/start"></label><label>SSO region<input id="aws-sso-region" aria-label="SSO region" placeholder="eu-west-1"></label><label>AWS account ID<input id="aws-account" aria-label="AWS account ID" inputmode="numeric" placeholder="12 digits"></label><label>SSO role / permission-set name<input id="aws-role" aria-label="SSO role name" placeholder="Your assigned role"></label></div><button id="aws-profile-create" class="button secondary">Save named SSO profile</button><p>The EKS region above is saved as the profile’s default region. Ask your AWS administrator for portal/account/role information if needed.</p></details>';
   const q = selector => host.querySelector(selector), status = message => { if (current()) q('#aws-status').textContent = message; };
   const demo = { available: true, profiles: [{ name: 'demo-company-sso', region: 'eu-west-1', sso: true, account: '000000000000', role: 'DemoAccess' }], message: 'Demo only. No AWS login or configuration changes occur.' };
   function invalidate() { namespaceNames=[];clearTimeout(manualClusterTimer);++epoch; clearTimeout(timer); imported = null; q('#aws-open').disabled = true; q('#aws-connect').disabled = true; q('#aws-cluster').disabled = true; q('#aws-cluster').innerHTML = '<option value="">Load clusters first…</option>';q('#aws-cluster-name').value='';q('#aws-namespace').value='';namespacePopover.close();q('#aws-namespace-options').replaceChildren();q('#aws-namespace-status').textContent='Choose a cluster to load namespaces.';namespaceEpoch++;namespaceJob=null;q('#aws-connect').textContent='Connect to cluster'; }
@@ -68,7 +68,7 @@ window.elD90AWSConnections = { async render(host, opts) {
       if(!check.canListPods){status(check.message);return;}
       status('Opening cluster workspace…');
       await opts.onEKSConnect?.(imported.context,namespace);
-      if(current()&&own===epoch)q('#sso-summary').textContent='Connected';
+      if(current()&&own===epoch)showSummary('Cluster connected', true);
     }catch(error){if(current()&&own===epoch)status(error.message);}finally{connectPending=false;if(current()&&own===epoch)q('#aws-connect').disabled=false;}
   };
   q('#aws-open').onclick=()=>q('#aws-connect').click();
@@ -76,9 +76,12 @@ window.elD90AWSConnections = { async render(host, opts) {
   // Account/role discovery starts with portal information, before any role profile exists.
   const discovery = document.createElement('section'); discovery.className = 'aws-sso-discovery';
   discovery.innerHTML = `
-    <p id="sso-summary" aria-live="polite">AWS sign-in required</p>
+    <p id="sso-summary" role="status"><strong id="sso-summary-state" class="aws-status-badge">AWS sign-in required</strong> <span id="sso-summary-details" hidden></span></p>
     <ol class="aws-steps" aria-label="AWS connection progress">
-      <li>Sign in</li><li>Select account</li><li>Select role</li><li>Select cluster</li>
+      <li>Sign in <span class="aws-current-step">Current step</span></li>
+      <li>Select account <span class="aws-current-step">Current step</span></li>
+      <li>Select role <span class="aws-current-step">Current step</span></li>
+      <li>Select cluster <span class="aws-current-step">Current step</span></li>
     </ol>
     <section class="aws-step-card">
       <h3>Sign in</h3>
@@ -93,7 +96,7 @@ window.elD90AWSConnections = { async render(host, opts) {
         <button id="sso-reopen" class="button secondary" hidden>Open approval page again</button>
         <button id="sso-cancel" class="button secondary" hidden>Cancel discovery</button>
       </div>
-      <p id="sso-status" role="status"></p>
+      <p id="sso-status" role="status"><strong class="aws-status-badge success" id="sso-status-state" hidden>AWS signed in</strong> <span id="sso-status-message"></span></p>
     </section>
     <div class="aws-assignment-grid">
       <section class="aws-step-card">
@@ -119,7 +122,13 @@ window.elD90AWSConnections = { async render(host, opts) {
     </div>`;
   host.querySelector('h2').after(discovery);
   let discoveryId, discoveryEpoch = 0, discoveryTimer;
-  const ds = message => { if(current())q('#sso-status').textContent = message; };
+  const ds = message => {
+    if (!current()) return;
+    q('#sso-status-state').hidden = !authenticated;
+    q('#sso-status-message').textContent = authenticated
+      ? message.replace(/^Signed in(?: · |\. ?)/, '')
+      : message;
+  };
   function floatingChoices(anchor, panel, search = anchor) {
     function position() {
       const rect = anchor.getBoundingClientRect();
@@ -175,18 +184,30 @@ window.elD90AWSConnections = { async render(host, opts) {
   }
 
   let authenticated = false, verifiedProfile = null, activeRole = '';
+  function showSummary(label, success, ...details) {
+    const badge = q('#sso-summary-state');
+    badge.textContent = label;
+    badge.classList.toggle('success', success);
+    const metadata = q('#sso-summary-details');
+    metadata.textContent = details.filter(Boolean).join(' · ');
+    metadata.hidden = !metadata.textContent;
+  }
   function progress() {
+    q('#sso-status-state').hidden = !authenticated;
     const stage = verifiedProfile ? 3 : !authenticated ? 0 : !accountPicker.value ? 1 : !activeRole ? 2 : 3;
     [...discovery.querySelectorAll('.aws-steps li')].forEach((step, index) => {
       step.classList.toggle('complete', index < stage);
       if (index === stage) step.setAttribute('aria-current', 'step');
       else step.removeAttribute('aria-current');
     });
-    q('#sso-summary').textContent = verifiedProfile
-      ? [verifiedProfile.sso ? 'AWS signed in' : 'AWS profile verified', verifiedProfile.account, verifiedProfile.role || verifiedProfile.name].filter(Boolean).join(' · ')
-      : authenticated
-      ? ['AWS signed in', accountPicker.selection?.label, activeRole].filter(Boolean).join(' · ')
-      : 'AWS sign-in required';
+    if (verifiedProfile) {
+      showSummary(verifiedProfile.sso ? 'AWS signed in' : 'AWS profile verified', true,
+        verifiedProfile.account, verifiedProfile.role || verifiedProfile.name);
+    } else if (authenticated) {
+      showSummary('AWS signed in', true, accountPicker.selection?.label, activeRole);
+    } else {
+      showSummary('AWS sign-in required', false);
+    }
   }
 
   function accountChoice({id, name}) {
@@ -287,10 +308,11 @@ window.elD90AWSConnections = { async render(host, opts) {
   const resetDiscovery = () => { ++discoveryEpoch; clearTimeout(discoveryTimer); authenticated=false;verifiedProfile=null;activeRole='';accountPicker.set([],'Sign in to load accounts.');resetRoles();progress(); };
   async function pollDiscovery(own) {
     if(!current()||own!==discoveryEpoch)return;
-    try { const result=await opts.invoke('aws:sso-status',{id:discoveryId});if(!current()||own!==discoveryEpoch)return;ds(result.message);
+    try { const result=await opts.invoke('aws:sso-status',{id:discoveryId});if(!current()||own!==discoveryEpoch)return;
+      authenticated=result.state==='complete';ds(result.message);
       if(result.state==='running'){discoveryTimer=setTimeout(()=>pollDiscovery(own),700);return;}
       q('#sso-start').disabled=false;q('#sso-cancel').hidden=true;q('#sso-reopen').hidden=true;
-      if(result.state==='complete'){authenticated=true;showConfiguredPortal();q('#sso-start').textContent='Sign in again';accountPicker.set(result.accounts.map(accountChoice),'No AWS accounts are assigned to this sign-in.',result.selection?.account);if(accountPicker.value)await loadRoles(accountPicker.value,result.selection?.role||'',true);progress();}
+      if(authenticated){showConfiguredPortal();q('#sso-start').textContent='Sign in again';accountPicker.set(result.accounts.map(accountChoice),'No AWS accounts are assigned to this sign-in.',result.selection?.account);if(accountPicker.value)await loadRoles(accountPicker.value,result.selection?.role||'',true);progress();}
     }catch(error){if(current()&&own===discoveryEpoch){ds(error.message);q('#sso-start').disabled=false;q('#sso-cancel').hidden=true;q('#sso-reopen').hidden=true;}}
   }
   q('#sso-start').onclick=async()=>{if(activeRole)invalidateRoleConnection();resetDiscovery();const own=discoveryEpoch;q('#sso-start').disabled=true;ds('Opening browser sign-in…');try{if(opts.demo)throw Error('Discovery requires a live AWS SSO sign-in.');const result=await opts.invoke('aws:sso-start',{startUrl:q('#sso-portal').value.trim(),ssoRegion:q('#sso-region').value.trim()});if(!current()||own!==discoveryEpoch)return;discoveryId=result.id;q('#sso-cancel').hidden=false;q('#sso-reopen').hidden=false;pollDiscovery(own);}catch(error){if(current()&&own===discoveryEpoch){ds(error.message);q('#sso-start').disabled=false;}}};
@@ -300,7 +322,7 @@ window.elD90AWSConnections = { async render(host, opts) {
   async function loadRoles(account,restoreRole='',restoring=false){const own=++discoveryEpoch;if(!restoring)invalidateRoleConnection();resetRoles();progress();if(!account)return;q('#sso-role-status').textContent='Loading assigned roles…';ds('Loading assigned roles…');try{const result=await opts.invoke('aws:sso-roles',{id:discoveryId,account});if(!current()||own!==discoveryEpoch)return;rolePicker.set(result.roles.map(role=>({value:role,label:role})),'No roles assigned to this account.',restoreRole);if(rolePicker.value){activeRole=rolePicker.value;progress();ds('Signed in · '+account+' · '+rolePicker.value+'. Choose another role or connect to a cluster.');return;}ds(result.roles.length?'Choose the role to use for this connection.':'No roles assigned to this account.');}catch(error){if(current()&&own===discoveryEpoch){ds(error.message);q('#sso-role-status').textContent='Could not load roles.';q('#sso-retry-roles').hidden=false;}}}
   q('#sso-retry-roles').onclick=()=>loadRoles(accountPicker.value);
   q('#sso-use').onclick=async()=>{const own=discoveryEpoch;q('#sso-use').disabled=true;q('#sso-use').hidden=true;ds('Saving a separate profile for the selected role…');try{const result=await opts.invoke('aws:sso-select',{id:discoveryId,account:accountPicker.value,role:rolePicker.value,region:q('#aws-region').value.trim()||q('#sso-region').value.trim()});if(!current()||own!==discoveryEpoch)return;try{if(!opts.demo)localStorage.setItem('el-d90-aws-profile',result.profile);}catch{}invalidate();await overview(result.profile,()=>own===discoveryEpoch);if(!current()||own!==discoveryEpoch)return;activeRole=result.role;progress();ds(result.role+' selected.');await loadClusters();}catch(error){if(current()&&own===discoveryEpoch){ds(error.message);q('#sso-use').hidden=false;}}finally{if(current()&&own===discoveryEpoch)q('#sso-use').disabled=!rolePicker.value;}};
-  const network=document.createElement('details');network.id='aws-network-settings';network.innerHTML='<summary>AWS connection settings · automatic + overrides</summary><p>el-d90 imports exported proxy and CA settings from your login shell when launched normally. Use overrides here when needed. Blank fields use automatic settings. TLS certificate verification stays enabled.</p><div class="aws-connect-fields"><label>AWS CLI executable<input id="aws-executable-path" aria-label="AWS CLI executable path" placeholder="/Users/your-name/.local/bin/aws"></label><label>HTTPS proxy<input id="aws-https-proxy" aria-label="AWS HTTPS proxy" placeholder="http://proxy.example:8080"></label><label>Proxy bypass hosts<input id="aws-no-proxy" aria-label="AWS proxy bypass hosts" placeholder="localhost,127.0.0.1"></label><label>Company CA bundle<input id="aws-ca-bundle" aria-label="AWS CA bundle path" placeholder="/absolute/path/company-ca.pem"></label></div><button id="aws-network-refresh" class="button secondary">Refresh automatic settings</button><button id="aws-network-reset" class="button secondary">Use automatic settings for all fields</button><p id="aws-network-origins"></p><button id="aws-network-save" class="button secondary">Save connection settings</button><p id="aws-network-status" role="status"></p>';q('#aws-sso-setup').before(network);
+  const network=document.createElement('details');network.id='aws-network-settings';network.innerHTML='<summary>AWS connection settings · automatic + overrides</summary><p>el-d90 imports exported proxy and CA settings from your login shell when launched normally. Use overrides here when needed. Blank fields use automatic settings. TLS certificate verification stays enabled.</p><div class="aws-connect-fields"><label>AWS CLI executable<input id="aws-executable-path" aria-label="AWS CLI executable path" placeholder="/Users/your-name/.local/bin/aws"></label><label>HTTPS proxy<input id="aws-https-proxy" aria-label="AWS HTTPS proxy" placeholder="http://proxy.example:8080"></label><label>Proxy bypass hosts<input id="aws-no-proxy" aria-label="AWS proxy bypass hosts" placeholder="localhost,127.0.0.1"></label><label>Company CA bundle<input id="aws-ca-bundle" aria-label="AWS CA bundle path" placeholder="/absolute/path/company-ca.pem"></label></div><div class="aws-connect-actions"><button id="aws-network-refresh" class="button secondary">Refresh automatic settings</button><button id="aws-network-reset" class="button secondary">Use automatic settings for all fields</button></div><p id="aws-network-origins"></p><button id="aws-network-save" class="button primary">Save connection settings</button><p id="aws-network-status" role="status"></p>';q('#aws-sso-setup').before(network);
   function showNetwork(value){q('#aws-network-origins').textContent=Object.entries({awsExecutable:'AWS CLI',httpsProxy:'Proxy',noProxy:'Proxy bypass',caBundle:'CA bundle'}).map(([key,label])=>label+': '+(value.origins?.[key]||'Automatic')).join(' · ');q('#aws-executable-path').value=value.awsExecutable||'';q('#aws-https-proxy').value=value.httpsProxy||'';q('#aws-no-proxy').value=value.noProxy||'';q('#aws-ca-bundle').value=value.caBundle||'';q('#aws-network-status').textContent=(value.warning?value.warning+' ':'')+'Automatic settings: proxy '+(value.source?.proxy?'available':'not detected')+', CA bundle '+(value.source?.caBundle?'available':'not detected')+'.';}
   if(!opts.demo)try{const value=await opts.invoke('aws:network-get');if(current())showNetwork(value);}catch(error){if(current())q('#aws-network-status').textContent=error.message;}
   q('#aws-network-save').onclick=async()=>{q('#aws-network-save').disabled=true;try{if(opts.demo){q('#aws-network-status').textContent='Demo only. Connection settings were not saved.';return;}const preferred=q('#aws-profile').value;const value=await opts.invoke('aws:network-save',{awsExecutable:q('#aws-executable-path').value,httpsProxy:q('#aws-https-proxy').value,noProxy:q('#aws-no-proxy').value,caBundle:q('#aws-ca-bundle').value});if(!current())return;invalidate();job=null;q('#aws-login-cancel').hidden=true;showNetwork(value);await overview(preferred);if(current())q('#aws-network-status').textContent='Saved. Network settings apply immediately. Add the EKS connection again if you changed its AWS executable. Choose Check AWS connection, then Load EKS clusters.';}catch(error){if(current())q('#aws-network-status').textContent=error.message;}finally{if(current())q('#aws-network-save').disabled=false;}};

@@ -22,7 +22,22 @@
 #aws-connections h3 { font-size: 16px; font-weight: 700; margin: 0 0 12px; }
 #aws-connections small { display: block; color: var(--muted); font-size: 12px; }
 #aws-connections small:empty { display: none; }
-#sso-summary { color: var(--text); overflow-wrap: anywhere; }
+#sso-summary, #sso-status {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  overflow-wrap: anywhere;
+}
+.aws-status-badge {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--text);
+  background: var(--surface);
+}
+.aws-status-badge.success { color: #c5edbf; background: #263e30; border-color: #537c5e; }
+[data-theme=light] .aws-status-badge.success { color: #244f2b; background: #e4f3e5; }
 #sso-status { margin-bottom: 0; }
 #sso-portal-summary { overflow-wrap: anywhere; }
 #sso-configured { margin-bottom: 12px; }
@@ -34,11 +49,13 @@
   list-style: none;
   color: var(--muted);
 }
-.aws-steps li { display: flex; align-items: center; gap: 6px; }
+.aws-steps li { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 5px; }
 .aws-steps li::before { content: "○"; }
 .aws-steps .complete::before { content: "✓"; }
-.aws-steps [aria-current="step"] { color: var(--accent); font-weight: 700; }
-.aws-steps [aria-current="step"]::before { content: "●"; }
+.aws-steps [aria-current="step"] { color: var(--text); background: var(--selected); font-weight: 700; }
+.aws-steps [aria-current="step"]::before { content: "●"; color: var(--accent); }
+.aws-current-step { display: none; }
+[aria-current="step"] > .aws-current-step { display: inline; font-size: .85em; font-weight: 500; }
 .aws-assignment-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -54,9 +71,62 @@
 .aws-cluster-stage { margin: 12px 0; }
 .aws-cluster-stage .aws-connect-actions { align-items: end; }
 .aws-cluster-stage .aws-connect-actions label { display: grid; gap: 6px; }
-.connection-picker { width: 100%; text-align: left; overflow-wrap: anywhere; }
-.connection-picker::after { content: " ▾"; }
-.aws-step-card > small, #aws-namespace-status { margin-top: 6px; }
+#aws-connections .connection-picker {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.connection-picker::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  margin: -4px 4px 0 8px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.connection-picker[aria-expanded="true"]::after { transform: rotate(225deg); margin-top: 4px; }
+.aws-step-card > small { margin-top: 6px; }
+.aws-region-row label { color: var(--muted); font-size: 12px; }
+.aws-region-row > label > input,
+.aws-region-row > button,
+.aws-cluster-row > label > :is(input, select),
+.aws-cluster-row > button,
+.aws-cluster-row .aws-search-field > input {
+  block-size: calc(1.3em + 20px);
+  min-height: 0;
+  font-size: calc(var(--ui-size) * .92);
+  line-height: 1.3;
+}
+.aws-cluster-stage .aws-region-row input { padding: 9px; min-width: 0; }
+.aws-cluster-stage .aws-cluster-row { margin-bottom: 6px; }
+#aws-network-settings .aws-connect-actions { gap: 10px; }
+#aws-connections :is(.connection-picker, #aws-network-settings .button.secondary) {
+  background: var(--hover);
+  border-color: var(--muted);
+  color: var(--text);
+}
+#aws-connections :is(.connection-picker, #aws-network-settings .button.secondary):hover:not(:disabled) {
+  background: var(--selected);
+}
+#discovery-warning { white-space: normal; }
+#discovery-warning > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+#discovery-warning > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#discovery-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.discovery-show, .discovery-hide { white-space: nowrap; text-decoration: underline; }
+#discovery-warning[open] .discovery-show,
+#discovery-warning:not([open]) .discovery-hide { display: none; }
+#discovery-warning[open] #discovery-summary { white-space: normal; }
+#discovery-details { max-height: 18rem; overflow: auto; white-space: pre-wrap; margin-bottom: 0; }
 #aws-connections .connection-popover {
   position: fixed;
   inset: auto;
@@ -137,3 +207,11 @@
 }
 .aws-environment[data-environment="PROD"] { color: var(--red); }
 .aws-environment[data-environment="STG"] { color: var(--yellow); }
+
+#settings-confirmation {
+  position: fixed;
+  inset: auto 24px 24px auto;
+  z-index: 60;
+  max-width: min(360px, calc(100vw - 48px));
+  margin: 0;
+}

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.19] - 2026-11-16
+
+- Make AWS account and role dropdowns easier to identify. Highlight sign-in status and the current EKS setup step.
+- Align cluster controls and namespace options. Make connection settings actions easier to distinguish.
+- Collapse Kubernetes discovery errors to a one-line summary with expandable diagnostics.
+- Fit wrapped sidebar labels and align the terminal dock with the sidebar divider.
+- Add Medium text size. Close Settings after applying changes and show a confirmation.
+- Refresh Workloads Overview and resource tables quietly every 15 seconds, preserving the current row order, sort, page and scroll position.
+
 ## [0.5.18] - 2026-11-15
 
 - Fit resource tables to the window without horizontal scrolling, including paginated lists.
