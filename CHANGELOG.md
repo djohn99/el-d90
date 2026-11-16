@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.19] - 2026-11-16
+## [0.5.20] - 2026-11-16
 
 - Make AWS account and role dropdowns easier to identify. Highlight sign-in status and the current EKS setup step.
 - Align cluster controls and namespace options. Make connection settings actions easier to distinguish.
