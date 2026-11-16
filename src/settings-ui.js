@@ -22,7 +22,48 @@
  const smartPreview=()=>{clearTimeout(previewTimer);pendingPreview=smartPatch(q('settings-smart-seed').value);previewTimer=setTimeout(flushPreview,60);};q('settings-smart-seed').oninput=smartPreview;q('settings-smart-seed').onchange=()=>{smartPreview();flushPreview();};
  q('settings-colors-reset').onclick=()=>editAppearance({},true);
  q('settings-browse').onclick=async()=>{try{const result=await invoke('settings:pick-kubeconfig');if(result.cancelled)return;const lines=['kubeconfig:','  paths:',...result.paths.map(p=>'    - '+JSON.stringify(p))].join('\n');const text=q('settings-yaml').value;const re=/^kubeconfig:[\s\S]*?(?=^\S|(?![\s\S]))/m;q('settings-yaml').value=re.test(text)?text.replace(re,lines+'\n'):text.trimEnd()+'\n'+lines+'\n';q('settings-status').textContent='Paths selected. Save, then restart to use them.';}catch(e){q('settings-status').textContent=e.message;}};
- q('settings-save').onclick=async()=>{q('settings-save').disabled=true;try{flushPreview();const saving=edits.then(async()=>{const result=await invoke('settings:save',{yaml:q('settings-yaml').value});q('settings-yaml').value=result.yaml;apply(result.settings);committed=structuredClone(result.settings);committedYaml=result.yaml;form();q('settings-restart').classList.toggle('hidden',!result.restartRequired);q('settings-status').textContent=result.restartRequired?'Saved. Appearance applied; restart el-d90 to use the new kubeconfig paths.':'Settings saved and appearance applied.';});edits=saving.catch(()=>{});await saving;}catch(e){q('settings-status').textContent=e.message;}finally{q('settings-save').disabled=false;}};
+ let confirmationTimer;
+ q('settings-save').onclick = async () => {
+   const save = q('settings-save');
+   const dialog = q('settings-dialog');
+   const yaml = q('settings-yaml');
+   save.disabled = true;
+   try {
+     flushPreview();
+     let queuedSave;
+     const saving = edits.then(async () => {
+       const submitted = yaml.value;
+       const result = await invoke('settings:save', {yaml: submitted});
+       const newerYaml = yaml.value !== submitted;
+       if (!newerYaml) yaml.value = result.yaml;
+       apply(result.settings);
+       committed = structuredClone(result.settings);
+       committedYaml = result.yaml;
+       form();
+       q('settings-restart').classList.toggle('hidden', !result.restartRequired);
+       const message = result.restartRequired
+         ? 'Settings applied. Restart el-d90 to use the new kubeconfig paths.'
+         : 'Settings applied.';
+       q('settings-status').textContent = result.restartRequired ? message : '';
+       if (edits !== queuedSave || pendingPreview || newerYaml) return;
+       dialog.close();
+       const confirmation = q('settings-confirmation');
+       confirmation.textContent = message;
+       confirmation.classList.remove('hidden');
+       clearTimeout(confirmationTimer);
+       confirmationTimer = setTimeout(() => {
+         confirmation.classList.add('hidden');
+         confirmation.textContent = '';
+       }, result.restartRequired ? 10000 : 5000);
+     });
+     edits = queuedSave = saving.catch(() => {});
+     await saving;
+   } catch (e) {
+     q('settings-status').textContent = e.message;
+   } finally {
+     save.disabled = false;
+   }
+ };
  q('settings-restart').onclick=()=>invoke('app:restart').catch(e=>q('settings-status').textContent=e.message);
  }
  window.elD90Settings={initialize,terminal:()=>({fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',fontSize:Math.max(11,settings.appearance.fontSize-1),theme:settings.appearance.colors?.[mode()]&&Object.keys(settings.appearance.colors[mode()]).length?{background:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),foreground:getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),cursor:getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}:document.documentElement.dataset.theme==='light'?{background:'#ffffff',foreground:'#21352d',cursor:'#245d39',selectionBackground:'#c9dfd1'}:{background:'#101719',foreground:'#c4d6c9',cursor:'#c1edb7',selectionBackground:'#45634b'}})};

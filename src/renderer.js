@@ -12,7 +12,7 @@ function draftKey(object=state.selected,kind=state.selectedKind){return JSON.str
 function keepDismissedDraft(){if(!$('drawer').classList.contains('hidden')&&(state.selected||state.isCreating)){if($('yaml-editor').value===(state.originalYaml||'')){dismissedDrafts.delete(draftKey());return;}dismissedDrafts.set(draftKey(),{yaml:$('yaml-editor').value,original:state.originalYaml||''});}}
 let workspaceIntent=0;
 let requestEpoch = 0, detailEpoch = 0;let sessionUI,workspaceUI,detailLogViewer,lastResourceView=null,searchTimer=null;
-let state = { demo: false, forcedDemo: false, demoAvailable: false, context: '', namespace: '*', view: 'overview', items: [], selected: null, selectedKind: '', tab: 'summary', generation: 0, detailGeneration: 0, streamGeneration: 0, logs: null, terminal: null, terminalInstance: null, loading: false, contexts: [], catalogue: [], dynamicResource: '', namespaceError: '', namespacesKnown: false, discoveryError: '', namespaces: [], namespaceNames: [], logText: '', historySettings: {}, initialized: false };
+let state = { demo: false, forcedDemo: false, demoAvailable: false, context: '', namespace: '*', view: 'overview', items: [], selected: null, selectedKind: '', tab: 'summary', generation: 0, detailGeneration: 0, streamGeneration: 0, logs: null, terminal: null, terminalInstance: null, loading: false, contexts: [], catalogue: [], dynamicResource: '', namespaceError: '', namespacesKnown: false, discoveryError: '', discoveryPartial: false, namespaces: [], namespaceNames: [], logText: '', historySettings: {}, initialized: false };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const hidden = (id, hide) => $(id).classList.toggle('hidden', hide);
 function notice(text = '', info = false) { $('notice').textContent = text; $('notice').classList.toggle('info', info); hidden('notice', !text); }
@@ -47,8 +47,8 @@ async function invoke(channel, data) {
   if(data?.context&&!data.requestId&&['kube:list','kube:discover','kube:metrics','pods:table-data','node:pods','nodes:table-data','deployments:metrics','cluster:resources','resource:events'].includes(channel)&&data.context===state.context&&state.readRequestId)data={...data,requestId:state.readRequestId};
   return window.eld90.invoke(channel, data);
 }
-async function list(kind) {
-  const input = { context: state.context, namespace: state.namespace, namespaces: [...state.namespaces], resource: kind, progress: state.view!=='overview'&&!SPECIAL_VIEWS.includes(state.view)&&kind===activeResource() };
+async function list(kind, background = false) {
+  const input = { context: state.context, namespace: state.namespace, namespaces: [...state.namespaces], resource: kind, progress: !background&&state.view!=='overview'&&!SPECIAL_VIEWS.includes(state.view)&&kind===activeResource() };
   if (!state.demo) return invoke('kube:list', input);
   if (!input.namespaces.length) return window.demoWorkspace.list(kind, '*');
   const all = window.demoWorkspace.list(kind, '*'); return {items:all.items.filter(r=>!r.metadata.namespace || input.namespaces.includes(r.metadata.namespace))};
@@ -73,7 +73,7 @@ async function closeDrawer() {window.elD90TextFind?.close();window.elD90SecretVa
 async function initializeContext(context) {
   state.loading=true;hidden('busy',false);
   await closeDrawer();state.readRequestId=crypto.randomUUID(); state.generation = ++requestEpoch;
-  state.context = context; state.namespace = state.namespaces.length===1?state.namespaces[0]:'*'; state.namespaceError = ''; state.namespacesKnown = false; state.discoveryError = ''; state.catalogue = []; state.dynamicResource = ''; hidden('namespace-warning', true); hidden('namespace-manual', true); hidden('discovery-warning', true); renderNamespaceOptions();
+  state.context = context; state.namespace = state.namespaces.length===1?state.namespaces[0]:'*'; state.namespaceError = ''; state.namespacesKnown = false; state.discoveryError = ''; state.discoveryPartial = false; state.catalogue = []; state.dynamicResource = ''; hidden('namespace-warning', true); hidden('namespace-manual', true); renderDiscoveryWarning(); renderNamespaceOptions();
   $('breadcrumb-context').textContent = context || 'No cluster selected';
   notice();
   if (!context) {state.loading=false;hidden('busy',true); hidden('welcome', false); hidden('overview', true); hidden('resource-view', true); hidden('special-view', true); connection('Disconnected'); return; }
@@ -87,14 +87,17 @@ async function initializeContext(context) {
   } catch (e) { if (state.context === selected) { state.namespaceError = `Namespace list unavailable: ${e.message}\nEnter a namespace below to browse resources allowed by your permissions.`; $('namespace-warning').textContent = state.namespaceError; hidden('namespace-warning', false); hidden('namespace-manual', false); } }
   if (state.context === selected) { await discovery; if(state.context === selected) { state.initialized=true; await refresh(); saveWorkspacePreferences(); } }
 }
-function renderTable(target, items, kind, max = Infinity) {
-  if(kind==='pods')return window.elD90PodTable.render($(target),items.slice(0,max),state.podTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:pod=>openDetail(pod,'pods'),enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
-  if(kind==='nodes')return window.elD90NodeTable.render($(target),items.slice(0,max),state.nodeTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,onOpen:node=>openDetail(node,'nodes'),onShell:async node=>{await openDetail(node,'nodes');await tab('terminal');},enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
+function renderTable(target, items, kind, max = Infinity, preserveOrder = false) {
+  const enhance = (container, options) => window.elD90Productivity.enhanceTable(container, {
+    ...options, preserveOrder, rowKey: row => resourceRowKey(items[Number(row.dataset.index)])
+  });
+  if(kind==='pods')return window.elD90PodTable.render($(target),items.slice(0,max),state.podTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:pod=>openDetail(pod,'pods'),enhance,preserveOrder,onExport:text=>invoke('file:save',{text})});
+  if(kind==='nodes')return window.elD90NodeTable.render($(target),items.slice(0,max),state.nodeTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,onOpen:node=>openDetail(node,'nodes'),onShell:async node=>{await openDetail(node,'nodes');await tab('terminal');},enhance,preserveOrder,onExport:text=>invoke('file:save',{text})});
   if(kind==='customresourcedefinitions')return renderCustomDefinitions(target,items);
-  if(kind==='events'||kind?.startsWith('events.'))return renderEventsTable(target,items,max);
-  return window.elD90Columns.render($(target),items.slice(0,max),kind,{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:object=>openDetail(object,kind),enhance:window.elD90Productivity.enhanceTable,onExport:text=>invoke('file:save',{text})});
+  if(kind==='events'||kind?.startsWith('events.'))return renderEventsTable(target,items,max,preserveOrder);
+  return window.elD90Columns.render($(target),items.slice(0,max),kind,{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:object=>openDetail(object,kind),enhance,preserveOrder,onExport:text=>invoke('file:save',{text})});
 }
-function renderOverview(results) {
+function renderOverview(results, preserveOrder = false) {
   const [pods, deployments, nodes, events] = results.map(r => r.status === 'fulfilled' ? r.value.items || [] : []);
   const good = pods.filter(p => health(p).ready).length, pending = pods.filter(p => !health(p).ready && health(p).tone === 'yellow').length, errors = pods.filter(p => health(p).tone === 'red').length;
   const percent = pods.length ? Math.round(good / pods.length * 100) : 0;
@@ -108,23 +111,50 @@ function renderOverview(results) {
   $('health-caption').textContent = `${good} of ${pods.length} pods ready or completed`;
   events.sort((a, b) => new Date(b.lastTimestamp || b.metadata.creationTimestamp) - new Date(a.lastTimestamp || a.metadata.creationTimestamp));
   $('activity').innerHTML = events.length ? events.slice(0, 4).map(e => `<div class="activity-item"><span class="activity-symbol">${e.type === 'Warning' ? '!' : '✓'}</span><div>${escape(e.reason || e.involvedObject?.name || 'Cluster event')}<p>${escape(e.message || '')}</p></div><time>${age(e.lastTimestamp || e.metadata.creationTimestamp)} ago</time></div>`).join('') : '<div class="empty">No recent events.</div>';
-  renderTable('overview-table', pods, 'pods', 6);
+  renderTable('overview-table', pods, 'pods', 6, preserveOrder);
   if (results[0].status === 'rejected') { $('health-badge').textContent = 'Unavailable'; $('health-badge').className = 'pill gray'; $('health-percent').textContent = '—'; $('health-caption').textContent = 'Pod readiness unavailable because the request failed'; $('health-legend').innerHTML = '<p>Request failed. Readiness is unknown.</p>'; $('overview-table').innerHTML = '<div class="empty">Pods unavailable. See the request error above.</div>'; }
   if (results[3].status === 'rejected') $('activity').innerHTML = '<div class="empty">Events unavailable. See the request error above.</div>';
 }
 async function loadPodTableData(owner,items){const generation=owner.generation;if(owner.demo){const metrics={};for(const pod of items)metrics[pod.metadata.namespace+'/'+pod.metadata.name]={containers:[{cpu:'25m',memory:'32Mi'}]};owner.podTableData={metrics,warnings:[]};}else{try{const value=await invoke('pods:table-data',{context:owner.context,namespaces:[...owner.namespaces]});if(owner.generation===generation)owner.podTableData=value;}catch(e){if(owner.generation===generation)owner.podTableData={warnings:[e.message]};}}}
-async function refresh() {
+function resourceRowKey(item) {
+  return item ? JSON.stringify([item.metadata.namespace, item.metadata.name]) : undefined;
+}
+
+function preserveRowOrder(previous, next) {
+  const key = resourceRowKey;
+  const nextByKey = new Map(next.map(item => [key(item), item]));
+  const ordered = [];
+  for (const item of previous) {
+    const id = key(item);
+    if (nextByKey.has(id)) {
+      ordered.push(nextByKey.get(id));
+      nextByKey.delete(id);
+    }
+  }
+  return ordered.concat([...nextByKey.values()]);
+}
+
+async function refresh({background = false} = {}) {
   if (!state.context){if(NO_CONTEXT_VIEWS.includes(state.view)){hidden('welcome',true);hidden('overview',true);hidden('resource-view',true);hidden('special-view',false);state.generation=++requestEpoch;await renderSpecial(state.generation);}return;}
   if(state.readRequestId)invoke('read:cancel',{context:state.context,requestId:state.readRequestId}).catch(()=>{});state.readRequestId=crypto.randomUUID();
-  const generation = state.generation = ++requestEpoch; state.loading = true; hidden('busy', false);
+  const generation = state.generation = ++requestEpoch; state.loading = true; if (!background) hidden('busy', false);
   hidden('welcome', true); hidden('overview', state.view !== 'overview'); hidden('resource-view', state.view === 'overview' || SPECIAL_VIEWS.includes(state.view)); hidden('special-view', !SPECIAL_VIEWS.includes(state.view)); hidden('api-resource-picker', state.view !== 'resources');
-  updatePageHeading();
+  if (!background) updatePageHeading();
   if(!SPECIAL_VIEWS.includes(state.view))$('special-content').replaceChildren();
   try {
     if (state.view === 'overview') {
       const podMetrics=state.demo?null:loadPodTableData(state,[]);
-      const results = await Promise.allSettled(['pods', 'deployments', 'nodes', 'events'].map(list));
+      const results = await Promise.allSettled(['pods', 'deployments', 'nodes', 'events'].map(kind => list(kind, background)));
       if (generation !== state.generation) return;
+      if (background) {
+        if (results.some(result => result.status === 'rejected' || result.value.warnings?.length)) return;
+        results[0].value.items = preserveRowOrder(state.overviewResults?.[0]?.value?.items || [], results[0].value.items || []);
+        await podMetrics;
+        if (generation !== state.generation || refreshWouldInterrupt()) return;
+        state.overviewResults = results;
+        renderOverview(results, true);
+        return;
+      }
       const overviewOwner=state;if(overviewOwner.demo)await loadPodTableData(overviewOwner,results[0].status==='fulfilled'?results[0].value.items||[]:[]);state.overviewResults=results;renderOverview(results);if(podMetrics)podMetrics.then(()=>{if(state===overviewOwner&&generation===overviewOwner.generation&&state.view==='overview')renderOverview(results);}).catch(()=>{});
       const failures = results.map((r, i) => r.status === 'rejected' ? `${['Pods', 'Deployments', 'Nodes', 'Events'][i]}: ${r.reason.message}` : null).filter(Boolean);
       if (failures.length) notice(failures.join('\n')); else if (!state.demo) notice();
@@ -134,14 +164,31 @@ async function refresh() {
     } else {
       const kind = activeResource(); if (!kind) { $('resource-table').innerHTML = '<div class="empty">No discoverable listable resources. See API discovery status above.</div>'; return; }
       if(kind==='verticalpodautoscalers.autoscaling.k8s.io'&&!state.catalogue.some(r=>r.key===kind)){
-        state.items=[];state.listWarnings=[];$('resource-count').textContent='Unavailable';$('resource-table').innerHTML='<div class="empty">VPA is not advertised by this cluster. The Vertical Pod Autoscaler CRD/controller may not be installed, or API discovery is restricted. No autoscaler was installed or changed.</div>';notice();await syncWorkspaceWatches(state);return;
+        state.items=[];state.listWarnings=[];$('resource-count').textContent='Unavailable';$('resource-table').innerHTML='<div class="empty">VPA is not advertised by this cluster. The Vertical Pod Autoscaler CRD/controller may not be installed, or API discovery is restricted. No autoscaler was installed or changed.</div>';notice();return;
       }
-      const owner=state,resultRequest=list(kind);
+      const owner=state,resultRequest=list(kind, background);
+      const previousTableData = kind === 'pods' ? owner.podTableData : owner.nodeTableData;
       // Optional metrics never block resource first paint or navigation.
-      if(!owner.demo&&kind==='pods')owner.podTableData={metrics:{},warnings:[]};
-      if(!owner.demo&&kind==='nodes')owner.nodeTableData={metrics:{},podCounts:{},warnings:[]};
+      if(!background&&!owner.demo&&kind==='pods')owner.podTableData={metrics:{},warnings:[]};
+      if(!background&&!owner.demo&&kind==='nodes')owner.nodeTableData={metrics:{},podCounts:{},warnings:[]};
       const extraRequest=owner.demo?null:kind==='pods'?loadPodTableData(owner,[]):kind==='nodes'?invoke('nodes:table-data',{context:owner.context}).then(value=>{if(owner.generation===generation)owner.nodeTableData=value;},e=>{if(owner.generation===generation)owner.nodeTableData={warnings:[e.message]};}):kind==='deployments'?invoke('deployments:metrics',{context:owner.context,namespaces:[...owner.namespaces]}).catch(e=>({deployments:{},warnings:[e.message]})):null;
       const result=await resultRequest;if(state!==owner||generation!==owner.generation)return;
+      if (background) {
+        if (result.warnings?.length) return;
+        const usage = await extraRequest;
+        if (state !== owner || generation !== owner.generation || activeResource() !== kind || refreshWouldInterrupt()) return;
+        const items = preserveRowOrder(owner.items, result.items || []);
+        const updated = kind === 'deployments' && usage
+          ? items.map(item => ({...item, _elD90Usage: usage.deployments[item.metadata.namespace+'/'+item.metadata.name] || null}))
+          : items;
+        const tableData = kind === 'pods' ? owner.podTableData : owner.nodeTableData;
+        if (JSON.stringify(updated) === JSON.stringify(owner.items) &&
+            JSON.stringify(previousTableData) === JSON.stringify(tableData)) return;
+        owner.items = updated;
+        owner.listPartial = false;
+        filterTable({preserveScroll: true});
+        return;
+      }
       if(owner.demo&&kind==='pods')await loadPodTableData(owner,result.items||[]);
       if(owner.demo&&kind==='nodes'){const metrics={};for(const node of result.items||[])metrics[node.metadata.name]={cpu:'750m',memory:'2Gi'};const podCounts={};for(const pod of window.demoWorkspace.list('pods','*').items)if(pod.spec?.nodeName&&!['Succeeded','Failed'].includes(pod.status?.phase))podCounts[pod.spec.nodeName]=(podCounts[pod.spec.nodeName]||0)+1;owner.nodeTableData={metrics,podCounts,podsAvailable:true,warnings:[]};}
       if(owner.demo&&kind==='deployments')for(const d of result.items||[])d._elD90Usage={cpu:(d.status?.readyReplicas||0)*.025,memory:(d.status?.readyReplicas||0)*32*1024**2,pods:d.status?.readyReplicas||0,cpuSamples:d.status?.readyReplicas||0,memorySamples:d.status?.readyReplicas||0};
@@ -155,16 +202,22 @@ async function refresh() {
 
     }
     if(generation!==state.generation)return;
-    await syncWorkspaceWatches(state);if(generation!==state.generation)return;
     $('updated').textContent = `${state.demo ? 'Sample data · ' : ''}Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  } catch (e) { if (generation === state.generation) { state.items=[];state.listPartial=false;error(e); connection('Request failed'); if (SPECIAL_VIEWS.includes(state.view)) $('special-content').innerHTML = '<div class="empty">This view is unavailable. See the request error above.</div>'; $('resource-table').innerHTML = '<div class="empty">Unable to load resources. Check the connection message above.</div>'; } }
-  finally { if (generation === state.generation) { state.loading = false; hidden('busy', true);workspaceUI?.onState(); } }
+  } catch (e) { if (!background && generation === state.generation) { state.items=[];state.listPartial=false;error(e); connection('Request failed'); if (SPECIAL_VIEWS.includes(state.view)) $('special-content').innerHTML = '<div class="empty">This view is unavailable. See the request error above.</div>'; $('resource-table').innerHTML = '<div class="empty">Unable to load resources. Check the connection message above.</div>'; } }
+  finally { if (generation === state.generation) { state.loading = false; hidden('busy', true);if (!background) workspaceUI?.onState(); } }
 }
-function filterTable() {
+function filterTable({preserveScroll = false} = {}) {
+  const scrollTargets = () => [document.querySelector('main'), $('resource-table'),
+    $('resource-table').querySelector('.virtual-table-scroll')];
+  const focusedSort = preserveScroll && document.activeElement?.matches('.sort-column')
+    && $('resource-table').contains(document.activeElement) ? document.activeElement.closest('th').cellIndex : null;
+  const scroll = preserveScroll ? scrollTargets().map(el => [el?.scrollLeft || 0, el?.scrollTop || 0]) : [];
   state.search=$('search').value;state.statusFilter=$('status-filter').value;state.labelFilter=$('label-filter').value;
-  const query = $('search').value.trim().toLowerCase();const pageKey=JSON.stringify([state.context,activeResource(),query,state.statusFilter,state.labelFilter]),table=$('resource-table'),pager=window.elD90VirtualTable.states.get(table);if(table.dataset.pageFilter!==pageKey&&pager){pager.key=pageKey;pager.page=0;pager.column=null;}table.dataset.pageFilter=pageKey;
+  const query = $('search').value.trim().toLowerCase();const pageKey=JSON.stringify([state.context,activeResource(),query,state.statusFilter,state.labelFilter]),table=$('resource-table'),pager=window.elD90VirtualTable.states.get(table);if(table.dataset.pageFilter!==pageKey&&pager){pager.key=pageKey;pager.page=0;}table.dataset.pageFilter=pageKey;
   const eventView=activeResource()==='events'||activeResource()?.startsWith('events.');const items = state.items.filter(r => (eventView?window.elD90Events.matches(r,query):window.elD90WorkspaceModel.filtered(r,{query,status:$('status-filter')?.value||'',labels:$('label-filter')?.value||''})));
-  $('resource-count').textContent = `${items.length} resource${items.length === 1 ? '' : 's'}${state.listPartial?' loaded · loading…':''}`; renderTable('resource-table', items, activeResource());
+  $('resource-count').textContent = `${items.length} resource${items.length === 1 ? '' : 's'}${state.listPartial?' loaded · loading…':''}`; renderTable('resource-table', items, activeResource(), Infinity, preserveScroll);
+  if (focusedSort !== null) table.querySelector('thead tr')?.cells[focusedSort]?.querySelector('button')?.focus({preventScroll: true});
+  if (preserveScroll) scrollTargets().forEach((el, index) => el?.scrollTo(...scroll[index]));
 }
 function updatePageHeading(){
  const cluster=state.view==='cluster',resource=activeResource(),compact=state.view!=='overview'&&!SPECIAL_VIEWS.includes(state.view),clusterScoped=cluster||window.elD90NavigationResources.some(r=>r.key===resource&&!r.namespaced)||['nodes','namespaces','persistentvolumes','storageclasses','clusterroles','clusterrolebindings','customresourcedefinitions'].includes(resource)||state.catalogue.find(item=>item.key===resource)?.namespaced===false;document.querySelector('.page-heading').classList.toggle('compact-resource-heading',compact);document.querySelector('.content').classList.toggle('compact-resource-content',compact);document.querySelector('.resource-filters').hidden=state.view==='events';
@@ -356,9 +409,19 @@ window.eld90?.onStream(message => {
   if(message.id===owner.terminal){owner.terminalBuffer=((owner.terminalBuffer||'')+message.data).slice(-1000000);owner.terminalInstance?.write(message.data);if(message.ended)owner.terminal=null;}
 });
 
-(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); state.demoAvailable=info.demoAvailable===true; $('demo-toggle').hidden=!state.demoAvailable; $('welcome-demo').hidden=!state.demoAvailable; document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version; if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadExtensions();await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
+(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); state.demoAvailable=info.demoAvailable===true; $('demo-toggle').hidden=!state.demoAvailable; $('welcome-demo').hidden=!state.demoAvailable; document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version+(info.localBuild?' · LOCAL BUILD':''); if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadExtensions();await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
 
 function activeResource() { return state.view === 'resources' ? state.dynamicResource : state.view; }
+function renderDiscoveryWarning() {
+  const warning = $('discovery-warning');
+  const details = state.discoveryError;
+  hidden('discovery-warning', !details);
+  if ($('discovery-details').textContent !== details || !details) warning.open = false;
+  $('discovery-summary').textContent = /token has expired and refresh failed/i.test(details)
+    ? 'AWS SSO session expired. Sign in again and retry.'
+    : state.discoveryPartial ? 'Kubernetes API discovery is partial.' : 'Kubernetes API discovery failed.';
+  $('discovery-details').textContent = details;
+}
 async function discoverResources(context) {
   try {
     const result = state.demo ? window.demoWorkspace.discovery() : await invoke('kube:discover', { context });
@@ -367,11 +430,14 @@ async function discoverResources(context) {
     state.dynamicResource = state.catalogue.find(r => !Object.hasOwn(titles, r.key))?.key || state.catalogue[0]?.key || '';
     renderDiscovery();
     $('resource-type').value = state.dynamicResource; updateResourceInfo();
-    if (result.warnings?.length) { $('discovery-warning').textContent = `API discovery is partial: ${result.warnings.join('\n')}`; hidden('discovery-warning', false); }
+    state.discoveryPartial = Boolean(result.warnings?.length);
+    state.discoveryError = result.warnings?.join('\n') || '';
+    renderDiscoveryWarning();
   } catch (e) {
     if (state.context !== context) return;
+    state.discoveryPartial = false;
     state.discoveryError = e.message;
-    $('discovery-warning').textContent = `API discovery unavailable: ${e.message}\nBuilt-in resource views remain available.`; hidden('discovery-warning', false);
+    renderDiscoveryWarning();
   }
 }
 function renderDiscovery(){
@@ -471,7 +537,6 @@ async function workloadAction(action) {
     const result=await invoke('kube:action',request);
     if(state===owner&&generation===owner.detailGeneration)$('action-result').textContent=result.cancelled?'Action cancelled.':result.output;
     if(!result.cancelled&&state===owner)await refresh();
-    else if(!result.cancelled)owner.watchDirty=true;
   }catch(e){if(state===owner&&generation===owner.detailGeneration)$('action-result').textContent=e.message;}
   finally{owner.workloadPending=false;}
 }
@@ -506,13 +571,13 @@ function freshWorkspace(context, demo=state.demo) {
 function shortContext(context) {return context.split('/').at(-1);}
 function storeWorkspaceUI(owner=state) {
   if(!owner.context) return;
-  owner.search=$('search').value;owner.statusFilter=$('status-filter').value;owner.labelFilter=$('label-filter').value;owner.autoRefresh=$('auto-refresh').checked;
+  owner.search=$('search').value;owner.statusFilter=$('status-filter').value;owner.labelFilter=$('label-filter').value;
   owner.drawerVisible=!$('drawer').classList.contains('hidden');if(owner.drawerVisible)owner.yamlDraft=$('yaml-editor').value;owner.savedTab=owner.tab;
   owner.helmDraft=captureHelmDrafts();owner.logContainer=$('log-container').value;owner.terminalContainer=$('terminal-container').value;owner.scroll=document.querySelector('main').scrollTop;
 }
 function saveWorkspacePreferences() {
   if(state.demo)return;
-  try {localStorage.setItem('el-d90-workspaces-v1',JSON.stringify({active:state.context,workspaces:[...clusterWorkspaces.values()].filter(w=>!w.demo).map(w=>({context:w.context,namespaces:w.namespaces,view:w.view==='connections'?'overview':w.view,historySettings:w.historySettings,search:w.search||'',statusFilter:w.statusFilter||'',labelFilter:w.labelFilter||'',extensionPage:w.extensionPage,clusterRole:w.clusterRole,autoRefresh:w.autoRefresh || false}))}));}catch{}
+  try {localStorage.setItem('el-d90-workspaces-v1',JSON.stringify({active:state.context,workspaces:[...clusterWorkspaces.values()].filter(w=>!w.demo).map(w=>({context:w.context,namespaces:w.namespaces,view:w.view==='connections'?'overview':w.view,historySettings:w.historySettings,search:w.search||'',statusFilter:w.statusFilter||'',labelFilter:w.labelFilter||'',extensionPage:w.extensionPage,clusterRole:w.clusterRole}))}));}catch{}
 }
 function renderClusterTabs() {
   renderContextPicker();
@@ -536,9 +601,9 @@ function paintWorkspace() {window.elD90SecretValues.clear();window.elD90Resource
   $('page-title').innerHTML=`${escape(titles[state.view]||state.view)}<span class="heading-dot">.</span>`;
   updatePageHeading();
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
-  $('search').value=state.search || '';$('status-filter').value=state.statusFilter||'';$('label-filter').value=state.labelFilter||'';workspaceUI?.onState();detailLogViewer?.reset('');$('auto-refresh').checked=Boolean(state.autoRefresh);hidden('drawer',true);hidden('busy',true);
+  $('search').value=state.search || '';$('status-filter').value=state.statusFilter||'';$('label-filter').value=state.labelFilter||'';workspaceUI?.onState();detailLogViewer?.reset('');hidden('drawer',true);hidden('busy',true);
   hidden('namespace-warning',state.view==='cluster'||!state.namespaceError);$('namespace-warning').textContent=state.namespaceError;hidden('namespace-manual',state.view==='cluster'||!state.namespaceError);
-  hidden('discovery-warning',!state.discoveryError);$('discovery-warning').textContent=state.discoveryError || '';
+  renderDiscoveryWarning();
   renderDiscovery();$('resource-type').value=state.dynamicResource;updateResourceInfo();
   if(state.connectionLabel)$('connection').innerHTML=`<span class="dot ${state.connected?'green':'muted'}"></span>${escape(state.connectionLabel)}`;
   document.querySelectorAll('.workspace-terminal').forEach(el=>el.classList.toggle('hidden',el!==state.terminalHost));requestAnimationFrame(()=>state.fitAddon?.fit());
@@ -590,7 +655,6 @@ document.addEventListener('click',event=>{if(!$('namespace-popover').classList.c
 $('namespace-all').onclick=()=>setNamespaceSelection([]);
 
 $('namespace-search').oninput=()=>{const q=$('namespace-search').value.toLowerCase();$('namespace-options').querySelectorAll('label').forEach(l=>l.hidden=!l.textContent.toLowerCase().includes(q));};
-$('auto-refresh').onchange=()=>{state.autoRefresh=$('auto-refresh').checked;saveWorkspacePreferences();syncWorkspaceWatches(state).catch(error);};
 async function restoreWorkspacePreferences() {
   let prefs;try{prefs=JSON.parse(localStorage.getItem('el-d90-workspaces-v1')||'null');}catch{return;}
   if(!Array.isArray(prefs?.workspaces))return;
@@ -601,7 +665,7 @@ async function restoreWorkspacePreferences() {
     owner.namespace=owner.namespaces.length===1?owner.namespaces[0]:'*';owner.namespaceNames=[...owner.namespaces];
     if(['all','worker','control-plane'].includes(pref.clusterRole))owner.clusterRole=pref.clusterRole;
     if(pref.historySettings&&typeof pref.historySettings==='object')owner.historySettings=pref.historySettings;
-    if(Object.hasOwn(titles,pref.view)&&pref.view!=='connections')owner.view=pref.view;if(pref.extensionPage&&typeof pref.extensionPage.id==='string'&&typeof pref.extensionPage.extensionId==='string')owner.extensionPage=pref.extensionPage;owner.search=typeof pref.search==='string'?pref.search.slice(0,500):'';owner.statusFilter=typeof pref.statusFilter==='string'?pref.statusFilter:'';owner.labelFilter=typeof pref.labelFilter==='string'?pref.labelFilter.slice(0,500):'';owner.autoRefresh=Boolean(pref.autoRefresh);owner.connectionLabel='Ready';
+    if(Object.hasOwn(titles,pref.view)&&pref.view!=='connections')owner.view=pref.view;if(pref.extensionPage&&typeof pref.extensionPage.id==='string'&&typeof pref.extensionPage.extensionId==='string')owner.extensionPage=pref.extensionPage;owner.search=typeof pref.search==='string'?pref.search.slice(0,500):'';owner.statusFilter=typeof pref.statusFilter==='string'?pref.statusFilter:'';owner.labelFilter=typeof pref.labelFilter==='string'?pref.labelFilter.slice(0,500):'';owner.connectionLabel='Ready';
     clusterWorkspaces.set(workspaceKey(pref.context,false),owner);
   }
   const active=valid.find(pref=>pref.context===prefs.active)||valid[0];if(active)await selectContext(active.context);
@@ -686,23 +750,22 @@ function paintCommandPalette(){
 $('command-query').oninput=paintCommandPalette;
 $('command-query').onkeydown=event=>{if(event.key==='Enter'){$('command-results').querySelector('button')?.click();}};
 
-async function syncWorkspaceWatches(owner,force=false){
- const resources=owner.autoRefresh&&!owner.demo&&!SPECIAL_VIEWS.includes(owner.view)?owner.view==='overview'?['pods','deployments','nodes','events']:[owner.view==='resources'?owner.dynamicResource:owner.view]:[];
- if(owner.view==='verticalpodautoscalers.autoscaling.k8s.io'&&!owner.catalogue.some(r=>r.key===owner.view))resources.length=0;
- const signature=JSON.stringify([owner.context,owner.namespaces,resources]);if(!force&&owner.watchSignature===signature)return;owner.watchSignature=signature;const ticket=(owner.watchEpoch||0)+1;owner.watchEpoch=ticket;
- const previous=owner.watchIds||[];owner.watchIds=[];owner.watchStates={};await Promise.all(previous.map(id=>invoke('watch:stop',{id}).catch(()=>{})));
- if(owner.watchEpoch!==ticket)return;
- if(!resources.length){paintWatchStatus();return;}
- const results=await Promise.allSettled(resources.filter(Boolean).map(resource=>invoke('watch:start',{context:owner.context,namespace:owner.namespace,namespaces:[...owner.namespaces],resource})));
- if(owner.watchEpoch!==ticket){await Promise.all(results.filter(r=>r.status==='fulfilled').map(r=>invoke('watch:stop',{id:r.value.id}).catch(()=>{})));return;}
- owner.watchIds=results.filter(r=>r.status==='fulfilled').map(r=>r.value.id);owner.watchStartErrors=results.flatMap(r=>r.status==='rejected'?[r.reason.message]:[]);paintWatchStatus();
+function refreshWouldInterrupt() {
+  const focused = document.activeElement;
+  return document.hidden || Boolean(document.querySelector('dialog[open]')) ||
+    Boolean(focused?.closest('.table-toolbar, .resource-filters, #resource-table, #overview-table') &&
+      !focused.matches('.sort-column'));
 }
-function paintWatchStatus(){
- if(!$('watch-status'))return;const statuses=Object.values(state.watchStates||{}),errors=[...(state.watchStartErrors||[]),...statuses.filter(s=>s.error).map(s=>s.error)];$('watch-status').textContent=!state.autoRefresh?'':state.demo?'Demo · no watch':errors.length?'Watch needs attention':statuses.some(s=>s.state==='watching')?'Watching live':state.watchIds?.length?'Connecting watch…':'';$('watch-status').title=errors.join('\n');hidden('watch-reconnect',!errors.length);
-}
-$('watch-reconnect').onclick=()=>syncWorkspaceWatches(state,true).catch(error);
-window.eld90?.onWatchStatus(value=>{const owner=clusterWorkspaces.get(workspaceKey(value.context,false));if(!owner)return;owner.watchStates=owner.watchStates||{};if(value.state==='stopped')delete owner.watchStates[value.id];else owner.watchStates[value.id]=value;if(owner===state)paintWatchStatus();});
-window.eld90?.onWatch(value=>{const owner=clusterWorkspaces.get(workspaceKey(value.context,false));if(!owner||!owner.watchIds?.includes(value.id))return;owner.watchDirty=true;clearTimeout(owner.watchRefreshTimer);owner.watchRefreshTimer=setTimeout(()=>{if(state===owner&&!state.loading){owner.watchDirty=false;refresh();}},250);});
+
+const backgroundRefreshInterval = 15000;
+setInterval(() => {
+  if (!state.context || state.demo || !state.initialized || state.loading || document.hidden) return;
+  if (SPECIAL_VIEWS.includes(state.view) || !activeResource()) return;
+  if (activeResource() === 'verticalpodautoscalers.autoscaling.k8s.io' &&
+      !state.catalogue.some(resource => resource.key === activeResource())) return;
+  if (refreshWouldInterrupt()) return;
+  refresh({background: true});
+}, backgroundRefreshInterval);
 
 function setupCreateControls(restoring){
  const types=window.elD90Create.catalogue(state.catalogue);$('create-kind').innerHTML=types.map((r,i)=>`<option value="${i}">${escape(r.kind)} · ${escape(r.apiVersion)}${r.namespaced?'':' · cluster'}</option>`).join('');const chosen=types.findIndex(r=>r.kind==='ConfigMap');$('create-kind').value=String(chosen<0?0:chosen);
@@ -713,16 +776,19 @@ function setupCreateControls(restoring){
  $('import-yaml').onclick=async()=>{try{if($('yaml-editor').value.trim()&&!confirm('Replace the current editor contents with a YAML file?'))return;const result=await invoke('file:open-yaml');if(!result.cancelled){$('yaml-editor').value=result.text;$('yaml-result').textContent='File loaded locally. Review and Validate before Apply.';editorTools?.clear();}}catch(e){$('yaml-result').textContent=e.message;}};
 }
 
-function renderEventsTable(target,items,max=Infinity){
- const rows=window.elD90Events.newest(items).slice(0,max),container=$(target);
+function renderEventsTable(target,items,max=Infinity,preserveOrder=false){
+ const rows=(preserveOrder ? items : window.elD90Events.newest(items)).slice(0,max),container=$(target);
+ const enhance = (host, options) => window.elD90Productivity.enhanceTable(host, {
+   ...options, preserveOrder, rowKey: row => resourceRowKey(rows[Number(row.dataset.index)])
+ });
  if(!rows.length){container.innerHTML='<div class="empty">No retained events match this view. Check the namespace selection and search. Kubernetes events expire; this is not an audit history.</div>';return;}
  const headers=['Type','Reason','Object','Namespace','Message','Count','Last seen'].map(c=>'<th>'+c+'</th>'),help='<p class="events-help">Newest events first · select a row for full details · Kubernetes retains events for a limited time.</p>';
  const values=event=>{const e=window.elD90Events.normalize(event);return[e.type,e.reason,e.object,e.namespace,e.message,e.count,age(e.last)+' ago'];};
  const row=(event,i)=>{const e=window.elD90Events.normalize(event);return `<tr role="button" tabindex="0" data-index="${i}" aria-label="Event ${escape(e.reason)} ${escape(e.object)}">${values(event).map((v,j)=>'<td'+(j===4?' class="event-message"':'')+'>'+(j===0?'<span class="pill '+(e.type==='Warning'?'red':'green')+'">'+escape(v)+'</span>':escape(v))+'</td>').join('')}</tr>`;};
  const tableOptions={storageKey:'events-v2',onExport:text=>invoke('file:save',{text})};
- if(rows.length>50)return window.elD90VirtualTable.mount(container,{items:rows,headers,help,className:'events-table',row,values,open:event=>openDetail(event,'events'),enhance:window.elD90Productivity.enhanceTable,tableOptions});
+ if(rows.length>50)return window.elD90VirtualTable.mount(container,{items:rows,headers,help,className:'events-table',row,values,open:event=>openDetail(event,'events'),enhance,preserveOrder,tableOptions});
  container.innerHTML=help+'<table class="events-table"><thead><tr>'+headers.join('')+'</tr></thead><tbody>'+rows.map(row).join('')+'</tbody></table>';
- container.querySelectorAll('tbody tr').forEach(r=>{r.onclick=()=>openDetail(rows[Number(r.dataset.index)],'events');r.onkeydown=e=>{if(e.key==='Enter')r.click();};});window.elD90Productivity.enhanceTable(container,tableOptions);
+ container.querySelectorAll('tbody tr').forEach(r=>{r.onclick=()=>openDetail(rows[Number(r.dataset.index)],'events');r.onkeydown=e=>{if(e.key==='Enter')r.click();};});enhance(container,tableOptions);
 }
 async function loadResourceEvents(){const owner=state,object=owner.selected,epoch=owner.detailGeneration;const container=$('detail-events');container.innerHTML='<p>Loading events for this resource…</p>';try{if(!object?.metadata?.uid)throw Error('This resource has no UID for event lookup');const result=owner.demo?{items:[]}:await invoke('resource:events',{context:owner.context,namespace:object.metadata.namespace||'*',uid:object.metadata.uid});if(state!==owner||epoch!==owner.detailGeneration)return;container.innerHTML='<p>Events for this exact resource UID. Related Pods and ReplicaSets have their own events.</p><button id="refresh-resource-events" class="button secondary">Refresh events</button><div id="resource-events-table"></div>';renderEventsTable('resource-events-table',result.items||[]);$('refresh-resource-events').onclick=loadResourceEvents;}catch(e){if(state===owner&&epoch===owner.detailGeneration)container.textContent='Events unavailable: '+e.message;}}
 

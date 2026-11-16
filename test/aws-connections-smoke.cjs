@@ -39,6 +39,17 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   await page.getByText('AWS diagnostics',{exact:true}).click();await page.locator('#aws-diagnostics').click();await page.locator('#aws-status').filter({hasText:'OK — EKS cluster listing: 2 EKS clusters returned.'}).waitFor();const diagnostic=await page.locator('#aws-status').textContent();assert.ok(diagnostic.includes('AWS executable: '+mockAWS));assert.ok(diagnostic.includes('Profile: company-sso'));assert.ok(!diagnostic.includes('NEVER_SHOW'));assert.ok(!diagnostic.includes('assumed-role'));
   assert.equal(await page.locator('#aws-region').inputValue(), 'eu-west-1'); await page.locator('#aws-login').click(); await page.locator('#aws-cluster option[value=platform]').waitFor({ state: 'attached' }).catch(async error=>{console.error('AWS fixture status:',await page.locator('#aws-status').textContent());console.error('Fixture calls:',fs.readFileSync(record,'utf8'));throw error;}); assert.ok(!await page.locator('#aws-status').textContent().then(t => t.includes('OAUTH_SECRET') || t.includes('NEVER_SHOW')));
   await page.locator('#aws-namespace-options [data-namespace=team]').waitFor({state:'attached'});assert.equal(await page.evaluate(()=>state.context),'fixture-a');await page.locator('#aws-namespace').fill('none');assert.equal(await page.locator('#aws-namespace-options button').count(),0);await page.locator('#aws-namespace').fill('');await page.locator('#aws-namespace-options [data-namespace=team]').click();assert.equal(await page.locator('#aws-namespace').inputValue(),'team');
+  await page.locator('#aws-namespace').fill('');
+  const namespaceOption = page.locator('#aws-namespace-options [data-namespace=team]');
+  await namespaceOption.waitFor();
+  assert.ok(await namespaceOption.evaluate(option => {
+    const range = document.createRange();
+    range.selectNodeContents(option);
+    const text = range.getBoundingClientRect();
+    const row = option.getBoundingClientRect();
+    return text.top > row.top && text.bottom < row.bottom;
+  }));
+  await namespaceOption.click();
   assert.equal(fs.readFileSync(config, 'utf8'), originalAWS); assert.equal(fs.readFileSync(kubeconfig, 'utf8'), originalKube);
   const settings = YAML.parse(fs.readFileSync(path.join(profile, 'settings.yaml'), 'utf8')); assert.equal(settings.kubeconfig.paths[0], kubeconfig); assert.equal(settings.kubeconfig.paths.length, 2); const managed = YAML.parse(fs.readFileSync(settings.kubeconfig.paths[1], 'utf8')); assert.equal(managed.users[0].user.exec.args.at(-1), 'company-sso'); assert.equal(managed.users[0].user.token, undefined); assert.equal(fs.statSync(settings.kubeconfig.paths[1]).mode & 0o777, 0o600);
   await page.locator('#aws-namespace').fill('invalid namespace');await page.locator('#aws-connect').click();await page.locator('#aws-status').filter({hasText:'valid Kubernetes namespace'}).waitFor();assert.equal(await page.evaluate(()=>state.context),'fixture-a');
@@ -64,6 +75,9 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   await page.locator('[data-method=aws]').evaluate(el=>el.scrollIntoView({block:'start'}));
   const clusterBefore=await page.locator('.aws-cluster-stage').boundingBox();
   const accountTrigger=page.locator('#sso-account-trigger');
+  assert.equal(await page.locator('#sso-status-state').innerText(), 'AWS signed in');
+  assert.equal(await accountTrigger.evaluate(el => getComputedStyle(el).justifyContent), 'space-between');
+  assert.equal(await accountTrigger.evaluate(el => getComputedStyle(el, '::after').borderRightWidth), '2px');
   await accountTrigger.click();
   const menu=page.locator('#sso-account-menu');
   await menu.waitFor();
@@ -90,18 +104,18 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await menu.waitFor({state:'hidden'});
-  assert.equal(await page.locator('.aws-steps [aria-current=step]').textContent(),'Select role');
+  assert.match(await page.locator('.aws-steps [aria-current=step]').innerText(), /^Select role\s+Current step$/);
   await pick('account','123456789012');await page.locator('#sso-role [data-choice=AdministratorAccess]').waitFor({state:'attached'});
   await page.locator('#sso-account-trigger').click();await page.locator('#sso-account-search').fill('Digital Flight');assert.equal(await page.locator('#sso-account button').count(),1);assert.equal(await page.locator('#sso-account button[aria-pressed=true]').count(),1);await page.locator('#sso-account-search').fill('');await page.locator('#sso-role-trigger').click();await menu.waitFor({state:'hidden'});assert.equal(await page.locator('#sso-role-menu .aws-search-icon').isVisible(),true);await page.locator('#sso-role-search').fill('Administrator');assert.equal(await page.locator('#sso-role button').count(),1);await page.keyboard.press('Escape');
   await app.evaluate(()=>global.finishRoles({roles:['WrongAccountRole']}));assert.equal(await page.locator('#sso-role [data-choice=WrongAccountRole]').count(),0);
-  for(const role of ['AdministratorAccess','EditOnlyAccess']){await pick('role',role);await page.locator('#sso-status').filter({hasText:role+' selected'}).waitFor();assert.equal(await page.locator('.aws-steps [aria-current=step]').textContent(),'Select cluster');await page.waitForFunction(()=>!document.querySelector('#sso-use').disabled);assert.equal(await app.evaluate(()=>global.selectedSSORole.role),role);assert.equal(await page.locator('#aws-profile').inputValue(),'legacy');}
+  for(const role of ['AdministratorAccess','EditOnlyAccess']){await pick('role',role);await page.locator('#sso-status').filter({hasText:role+' selected'}).waitFor();assert.match(await page.locator('.aws-steps [aria-current=step]').innerText(), /^Select cluster\s+Current step$/);await page.waitForFunction(()=>!document.querySelector('#sso-use').disabled);assert.equal(await app.evaluate(()=>global.selectedSSORole.role),role);assert.equal(await page.locator('#aws-profile').inputValue(),'legacy');}
   await app.evaluate(({ipcMain})=>{global.profileReplies=[];ipcMain.removeHandler('aws:profiles');ipcMain.handle('aws:profiles',()=>new Promise(resolve=>global.profileReplies.push(resolve)));global.roleReplies=[];ipcMain.removeHandler('aws:sso-select');ipcMain.handle('aws:sso-select',(_e,input)=>new Promise(resolve=>global.roleReplies.push({input,resolve})));});
   await pick('role','AdministratorAccess');await page.waitForFunction(()=>document.querySelector('#aws-profile').value==='');assert.equal(await page.locator('#aws-connect').isDisabled(),true);
   await app.evaluate(()=>global.roleReplies[0].resolve({profile:'old-admin',account:'123456789012',role:'AdministratorAccess'}));await page.waitForTimeout(80);assert.equal(await app.evaluate(()=>global.profileReplies.length),1);
   await pick('role','EditOnlyAccess');await app.evaluate(()=>global.profileReplies[0]({available:true,profiles:[{name:'old-admin',region:'eu-west-1',sso:true}],message:'STALE_ADMIN'}));await page.waitForTimeout(80);assert.equal(await page.locator('#aws-profile').inputValue(),'');assert.equal(await page.locator('#aws-connect').isDisabled(),true);assert.doesNotMatch(await page.locator('#sso-status').textContent(),/AdministratorAccess selected/);
   await app.evaluate(()=>global.roleReplies[1].resolve({profile:'new-edit',account:'123456789012',role:'EditOnlyAccess'}));await page.waitForTimeout(80);await app.evaluate(()=>global.profileReplies[1]({available:true,profiles:[{name:'new-edit',region:'eu-west-1',sso:true}],message:'Ready'}));await page.locator('#sso-status').filter({hasText:'EditOnlyAccess selected'}).waitFor();assert.equal(await page.locator('#aws-profile').inputValue(),'new-edit');await page.locator('#aws-cluster option[value=platform]').waitFor({state:'attached'});
   await app.evaluate(({ipcMain})=>{global.resumeSignIns=0;const set=(c,f)=>{ipcMain.removeHandler(c);ipcMain.handle(c,f);};const active={id:'resume-fixture',state:'complete',message:'Restored existing AWS SSO session.',startUrl:'https://company.awsapps.com/start',ssoRegion:'eu-west-1',accounts:[{id:'123456789012',name:'Primary'}],selection:{profile:'new-edit',account:'123456789012',role:'EditOnlyAccess'}};set('aws:profiles',()=>({available:true,profiles:[{name:'new-edit',sso:true,region:'eu-west-1'}],message:'Ready'}));set('aws:sso-portals',()=>({portals:[{startUrl:active.startUrl,ssoRegion:active.ssoRegion}],active}));set('aws:sso-status',()=>active);set('aws:sso-start',()=>{global.resumeSignIns++;throw Error('Unnecessary browser sign-in');});set('aws:sso-roles',()=>({roles:['AdministratorAccess','EditOnlyAccess']}));});
-  for(let visit=0;visit<2;visit++){await openAWS();await page.locator('#sso-role [data-choice=EditOnlyAccess][aria-pressed=true]').waitFor({state:'attached'});assert.equal(await page.locator('#sso-account [data-choice="123456789012"]').getAttribute('aria-pressed'),'true');assert.equal(await page.locator('#aws-profile').inputValue(),'new-edit');assert.match(await page.locator('#sso-status').textContent(),/Signed in/);assert.equal(await app.evaluate(()=>global.resumeSignIns),0);if(!visit){await page.evaluate(()=>navigate('pods'));await page.waitForFunction(()=>!state.loading);}}
+  for(let visit=0;visit<2;visit++){await openAWS();await page.locator('#sso-role [data-choice=EditOnlyAccess][aria-pressed=true]').waitFor({state:'attached'});assert.equal(await page.locator('#sso-account [data-choice="123456789012"]').getAttribute('aria-pressed'),'true');assert.equal(await page.locator('#aws-profile').inputValue(),'new-edit');assert.match(await page.locator('#sso-status').textContent(),/AWS signed in/);assert.equal(await app.evaluate(()=>global.resumeSignIns),0);if(!visit){await page.evaluate(()=>navigate('pods'));await page.waitForFunction(()=>!state.loading);}}
   await page.locator('#sso-edit').click();await page.locator('#sso-portal').fill('https://other.awsapps.com/start');assert.equal(await page.locator('#sso-account-search').isDisabled(),true);assert.equal(await page.locator('#sso-use').isDisabled(),true);
   // A slow session restore must not replace a profile explicitly chosen meanwhile.
   await page.evaluate(()=>navigate('pods'));await page.waitForFunction(()=>!state.loading);
@@ -125,6 +139,34 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   assert.equal(await page.locator('#connection-choose').isVisible(),true);
   await page.locator('[data-method=aws]').click();
   assert.equal(await page.locator('#aws-cluster').inputValue(),'recovered-cluster');
+  const layout = await page.locator('.aws-cluster-stage').evaluate(stage => {
+    const bounds = selector => {
+      const {top, bottom} = stage.querySelector(selector).getBoundingClientRect();
+      return {top, bottom};
+    };
+    return ['#aws-region', '#aws-clusters-load', '#aws-cluster', '#aws-cluster-name',
+      '#aws-namespace', '#aws-connect', '#aws-namespace-status'].map(bounds);
+  });
+  assert.deepEqual(layout[0], layout[1]);
+  assert.deepEqual(layout.slice(3, 6), Array(3).fill(layout[2]));
+  assert.ok(layout[6].top >= layout[5].bottom);
+
+  await page.locator('[data-view=overview]').click();
+  await app.evaluate(({ipcMain}) => {
+    ipcMain.removeHandler('kube:discover');
+    ipcMain.handle('kube:discover', () => {
+      throw new Error('Token has expired and refresh failed\nFixture diagnostic stack');
+    });
+  });
+  await page.evaluate(() => discoverResources(state.context));
+  const warning = page.locator('#discovery-warning');
+  assert.equal(await page.locator('#discovery-summary').innerText(), 'AWS SSO session expired. Sign in again and retry.');
+  assert.equal(await warning.locator('pre').isVisible(), false);
+  await warning.getByText('Show details').click();
+  assert.match(await warning.locator('pre').innerText(), /Fixture diagnostic stack/);
+  await warning.getByText('Hide details').click();
+  assert.equal(await warning.locator('pre').isVisible(), false);
+
   const calls = fs.readFileSync(record, 'utf8').trim().split('\n').map(JSON.parse); assert.ok(calls.some(c => c.args.slice(0, 2).join(' ') === 'sso login')); assert.ok(calls.some(c => c.args.slice(0, 2).join(' ') === 'eks describe-cluster')); assert.ok(!calls.some(c => c.args.includes('get-token'))); assert.deepEqual(errors, []);
   console.log('PASS: bold headings, browser-owned SSO job, EKS profile/region selection, private app kubeconfig registration, global config preservation, immediate context opening, stale profile/list/import isolation, automatic access-scoped namespace loading/search/selection and manual cluster entry using offline fixtures');
 } finally { await app?.close(); fs.rmSync(temp, { recursive: true, force: true }); } })().catch(error => { console.error(error); process.exitCode = 1; });

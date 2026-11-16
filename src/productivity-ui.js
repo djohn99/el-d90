@@ -24,6 +24,15 @@
     controls.querySelector('[data-editor=complete]').onclick=()=>work(complete);const keydown=event=>{if(event.ctrlKey&&event.code==='Space'){event.preventDefault();work(complete);}};editor.addEventListener('keydown',keydown);
     const handle={controls,output,clear(){output.textContent='';completions.innerHTML='';},dispose(){editor.removeEventListener('keydown',keydown);controls.remove();completions.remove();output.remove();attached.delete(editor);}};attached.set(editor,handle);return handle;
   }
+  const tableSorts = new WeakMap();
+  function tableSort(container, storageKey) {
+    const key = JSON.stringify([storageKey, container.dataset.pageFilter]);
+    const previous = tableSorts.get(container);
+    if (previous?.key === key) return previous;
+    const state = {key, index: null, direction: 1};
+    tableSorts.set(container, state);
+    return state;
+  }
   function enhanceTable(container,opts={}){const table=container?.querySelector('table');if(!table||table.dataset.productivity==='true')return;styles();table.dataset.productivity='true';const headers=[...table.tHead?.rows[0]?.cells||[]],body=table.tBodies[0];if(!headers.length||!body)return;const tools=document.createElement('div');tools.className='table-tools';const columns=document.createElement('details');columns.className='table-columns';columns.innerHTML='<summary>Columns</summary><div></div>';{columns.classList.add('node-column-picker');columns.querySelector('summary').textContent='⋮';columns.querySelector('summary').setAttribute('aria-label',opts.pickerLabel||'Choose columns');columns.addEventListener('toggle',()=>{if(!columns.open)return;const rect=columns.querySelector('summary').getBoundingClientRect(),menu=columns.querySelector('div');menu.style.position='fixed';menu.style.top=Math.min(rect.bottom+5,window.innerHeight-180)+'px';menu.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-240))+'px';menu.style.maxHeight=Math.max(120,window.innerHeight-rect.bottom-20)+'px';});}tools.append(columns);const exportButton=document.createElement('button');exportButton.type='button';exportButton.className='text-button';exportButton.textContent='Export CSV';tools.append(exportButton);const status=document.createElement('span');status.className='table-tool-status';tools.append(status);table.insertAdjacentElement('beforebegin',tools);
     let visible=headers.map((_,i)=>opts.defaultVisible?.[i]??true);try{const saved=JSON.parse(localStorage.getItem('el-d90-columns:'+opts.storageKey)||'null');if(Array.isArray(saved)&&saved.length===headers.length&&saved.every(v=>typeof v==='boolean'))visible=saved;}catch{}
     const widthKey='el-d90-column-widths:'+opts.storageKey,keys=headers.map((h,i)=>h.dataset.resourceColumn||h.dataset.nodeColumn||h.dataset.podColumn||h.textContent.trim()||String(i));let savedWidths={};try{const value=JSON.parse(localStorage.getItem(widthKey)||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))savedWidths=value;}catch{}
@@ -59,11 +68,35 @@
     const reset=index=>{widths[index]=defaultWidth(keys[index],index);applyWidths();persistWidths();};
     const cellValue=cell=>cell?.dataset.value??cell?.textContent.trim()??'';
     const apply=()=>{applyWidths();for(const row of table.rows)[...row.cells].forEach((cell,index)=>cell.hidden=!visible[index]);try{if(opts.storageKey)localStorage.setItem('el-d90-columns:'+opts.storageKey,JSON.stringify(visible));}catch{}};
-    headers.forEach((header,index)=>{const label=header.textContent.trim()||'Actions';const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=visible[index];checkbox.setAttribute('aria-label','Show '+label+' column');if(opts.lockedColumns?.includes(index)){visible[index]=true;checkbox.checked=true;checkbox.disabled=true;}const wrapper=document.createElement('label');wrapper.append(checkbox,document.createTextNode(label));columns.querySelector('div').append(wrapper);checkbox.onchange=()=>{if(!checkbox.checked&&visible.filter(Boolean).length===1){checkbox.checked=true;return;}visible[index]=checkbox.checked;apply();};if(!header.textContent.trim())return;const button=document.createElement('button');button.type='button';button.className='sort-column';button.textContent=label+' ↕';button.title=label;header.textContent='';header.append(button);let direction=1;button.onclick=()=>{if(opts.onSort){const appliedDirection=opts.onSort(index,direction)??direction;headers.forEach(h=>h.removeAttribute('aria-sort'));header.setAttribute('aria-sort',appliedDirection===1?'ascending':'descending');direction=-appliedDirection;return;}const rows=[...body.rows];rows.sort((a,b)=>{const aa=cellValue(a.cells[index]),bb=cellValue(b.cells[index]);return aa.localeCompare(bb,undefined,{numeric:true,sensitivity:'base'})*direction;});rows.forEach(row=>body.append(row));headers.forEach(h=>h.removeAttribute('aria-sort'));header.setAttribute('aria-sort',direction===1?'ascending':'descending');direction*=-1;};});
+    const sortState = tableSort(container, opts.storageKey);
+    function markSort() {
+      headers.forEach(header => header.removeAttribute('aria-sort'));
+      headers[sortState.index]?.setAttribute('aria-sort', sortState.direction === 1 ? 'ascending' : 'descending');
+    }
+    function applySort(preserveOrder) {
+      const {index, direction, order} = sortState;
+      if (index === null) return;
+      const rows = [...body.rows];
+      const rank = preserveOrder && order && opts.rowKey ? new Map(order.map((key, i) => [key, i])) : null;
+      rows.sort((a, b) => rank
+        ? (rank.get(opts.rowKey(a)) ?? Infinity) - (rank.get(opts.rowKey(b)) ?? Infinity)
+        : cellValue(a.cells[index]).localeCompare(cellValue(b.cells[index]), undefined, {numeric:true,sensitivity:'base'}) * direction);
+      rows.forEach(row => body.append(row));
+      if (opts.rowKey) sortState.order = rows.map(opts.rowKey);
+      markSort();
+    }
+    headers.forEach((header,index)=>{const label=header.textContent.trim()||'Actions';const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=visible[index];checkbox.setAttribute('aria-label','Show '+label+' column');if(opts.lockedColumns?.includes(index)){visible[index]=true;checkbox.checked=true;checkbox.disabled=true;}const wrapper=document.createElement('label');wrapper.append(checkbox,document.createTextNode(label));columns.querySelector('div').append(wrapper);checkbox.onchange=()=>{if(!checkbox.checked&&visible.filter(Boolean).length===1){checkbox.checked=true;return;}visible[index]=checkbox.checked;apply();};if(!header.textContent.trim())return;const button=document.createElement('button');button.type='button';button.className='sort-column';button.textContent=label+' ↕';button.title=label;header.textContent='';header.append(button);button.onclick=()=>{
+      const direction=sortState.index===index?-sortState.direction:1;
+      sortState.index=index;
+      sortState.direction=opts.onSort?.(index,direction)??direction;
+      if (!opts.onSort) applySort(false);
+      else markSort();
+    };});
+    if (!opts.onSort) applySort(opts.preserveOrder);
     headers.forEach((header,index)=>{const handle=document.createElement('span'),label=header.querySelector('.sort-column')?.textContent.replace(' ↕','')||header.textContent||'Actions';header.style.position='relative';handle.className='column-resizer';handle.tabIndex=0;handle.setAttribute('role','separator');handle.setAttribute('aria-orientation','vertical');handle.setAttribute('aria-label','Resize '+label+' column');handle.setAttribute('aria-valuemin','0');handle.setAttribute('aria-valuemax','100');handle.title='Drag to resize; arrow keys adjust; double-click to reset';header.append(handle);
       handle.onclick=event=>event.stopPropagation();handle.onpointerdown=event=>{if(event.button!==0)return;event.preventDefault();event.stopPropagation();const start=event.clientX,width=header.getBoundingClientRect().width;handle.setPointerCapture(event.pointerId);handle.classList.add('is-resizing');const move=e=>{resize(index,width+e.clientX-start);};const end=()=>{handle.classList.remove('is-resizing');handle.removeEventListener('lostpointercapture',end);handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',end);handle.removeEventListener('pointercancel',end);persistWidths();};handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);handle.addEventListener('lostpointercapture',end);};handle.onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home'].includes(event.key))return;event.preventDefault();event.stopPropagation();if(event.key==='Home'){reset(index);return;}resize(index,header.getBoundingClientRect().width+(event.key==='ArrowRight'?1:-1)*(event.shiftKey?50:10));persistWidths();};handle.ondblclick=event=>{event.preventDefault();event.stopPropagation();reset(index);};
     });
     exportButton.onclick=async()=>{const indexes=headers.map((_,i)=>i).filter(i=>visible[i]&&headers[i].textContent.trim());const data=opts.exportRows?opts.exportRows():[...body.rows].filter(row=>!row.classList.contains('virtual-spacer')).map(row=>[...row.cells].map(cellValue));const rows=[[...indexes.map(i=>headers[i].textContent.replace(/[↕↑↓]/g,'').trim())],...data.map(row=>indexes.map(i=>row[i]??''))];try{await opts.onExport?.(serializeRows(rows));status.textContent=`Exported ${data.length} rows.`;}catch(error){status.textContent=error.message||String(error);}};apply();return {tools,apply};
   }
-  return {attachEditor,enhanceTable,csvCell,serializeRows,fieldPathAtCursor};
+  return {attachEditor,enhanceTable,tableSort,csvCell,serializeRows,fieldPathAtCursor};
 });
