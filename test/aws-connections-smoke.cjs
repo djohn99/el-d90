@@ -139,17 +139,23 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   assert.equal(await page.locator('#connection-choose').isVisible(),true);
   await page.locator('[data-method=aws]').click();
   assert.equal(await page.locator('#aws-cluster').inputValue(),'recovered-cluster');
-  const layout = await page.locator('.aws-cluster-stage').evaluate(stage => {
-    const bounds = selector => {
-      const {top, bottom} = stage.querySelector(selector).getBoundingClientRect();
-      return {top, bottom};
-    };
-    return ['#aws-region', '#aws-clusters-load', '#aws-cluster', '#aws-cluster-name',
-      '#aws-namespace', '#aws-connect', '#aws-namespace-status'].map(bounds);
-  });
-  assert.deepEqual(layout[0], layout[1]);
-  assert.deepEqual(layout.slice(3, 6), Array(3).fill(layout[2]));
-  assert.ok(layout[6].top >= layout[5].bottom);
+  for (const width of [1080, 1460]) {
+    await app.evaluate(({BrowserWindow}, windowWidth) => {
+      BrowserWindow.getAllWindows()[0].setSize(windowWidth, 800);
+    }, width);
+    await page.waitForFunction(windowWidth => innerWidth === windowWidth, width);
+    const layout = await page.locator('.aws-cluster-stage').evaluate(stage => {
+      const bounds = selector => {
+        const {top, bottom} = stage.querySelector(selector).getBoundingClientRect();
+        return {top, bottom};
+      };
+      return ['#aws-region', '#aws-clusters-load', '#aws-cluster', '#aws-cluster-name',
+        '#aws-namespace', '#aws-connect', '#aws-namespace-status'].map(bounds);
+    });
+    assert.deepEqual(layout[0], layout[1]);
+    assert.deepEqual(layout.slice(3, 6), Array(3).fill(layout[2]));
+    assert.ok(layout[6].top >= layout[5].bottom);
+  }
 
   await page.locator('[data-view=overview]').click();
   await app.evaluate(({ipcMain}) => {
