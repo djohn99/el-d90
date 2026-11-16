@@ -112,3 +112,30 @@ table[data-productivity="true"] col[hidden] {
 .nodes-table [data-node-column="disk"] .resource-usage-track { margin: 0; }
 .nodes-table [data-node-column="disk"] .resource-usage-track > span { background: var(--yellow); }
 .nodes-table [data-node-column="memory"] .resource-usage-track.normal > span { background: #a779cf; }
+
+/* Let paginated resource lists fill the workspace below their controls. */
+main:has(.compact-resource-content #resource-view:not(.hidden) #resource-table > .virtual-table-scroll) {
+  display: flex;
+  flex-direction: column;
+}
+main:has(.compact-resource-content #resource-view:not(.hidden) #resource-table > .virtual-table-scroll) > :is(.workspace-bar, .cluster-tabs) {
+  flex-shrink: 0;
+}
+.compact-resource-content:has(#resource-view:not(.hidden) #resource-table > .virtual-table-scroll),
+.compact-resource-content #resource-view:not(.hidden):has(#resource-table > .virtual-table-scroll),
+.compact-resource-content #resource-view:not(.hidden) #resource-table:has(> .virtual-table-scroll) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+.compact-resource-content:has(#resource-view:not(.hidden) #resource-table > .virtual-table-scroll) {
+  width: 100%;
+  margin-block: 0;
+}
+.compact-resource-content #resource-view:not(.hidden) #resource-table > .virtual-table-scroll {
+  flex: 1 0 220px;
+  height: auto;
+}
+.compact-resource-content:has(#resource-view:not(.hidden) #resource-table > .virtual-table-scroll) .content-footer {
+  margin-top: 12px;
+}
