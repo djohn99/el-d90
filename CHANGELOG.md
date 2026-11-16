@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.21] - 2026-11-16
+
+- Let paginated resource tables use the available workspace height, with scrolling inside the table.
+
 ## [0.5.20] - 2026-11-16
 
 - Make AWS account and role dropdowns easier to identify. Highlight sign-in status and the current EKS setup step.
