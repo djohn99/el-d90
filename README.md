@@ -8,13 +8,13 @@ An independent, local Kubernetes desktop workspace for macOS and Windows. Open m
 
 **[⬇ Download the latest release for Apple Silicon](https://github.com/djohn99/el-d90/releases/latest)**
 
-[Direct DMG download for 0.5.18](https://github.com/djohn99/el-d90/releases/download/v0.5.18/el-d90-0.5.18-mac-arm64.dmg)
+[Direct DMG download for 0.5.19](https://github.com/djohn99/el-d90/releases/download/v0.5.19/el-d90-0.5.19-mac-arm64.dmg)
 
-[Direct Windows x64 ZIP download](https://github.com/djohn99/el-d90/releases/download/v0.5.18/el-d90-0.5.18-windows-x64.zip) · [Windows installation](#windows-x64)
+[Direct Windows x64 ZIP download](https://github.com/djohn99/el-d90/releases/download/v0.5.19/el-d90-0.5.19-windows-x64.zip) · [Windows installation](#windows-x64)
 
 Both downloads are public and require no GitHub sign-in.
 
-Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.18) · [All releases](https://github.com/djohn99/el-d90/releases)
+Requires **macOS 13 or later** on an **Apple Silicon Mac**. [Release notes](https://github.com/djohn99/el-d90/releases/tag/v0.5.19) · [All releases](https://github.com/djohn99/el-d90/releases)
 
 1. Download the DMG using the link above.
 2. Open the DMG and drag **el-d90** onto the **Applications** shortcut.
@@ -39,10 +39,10 @@ If the blocked-app message is missing, try opening el-d90 from Applications agai
 
 This grants an exception for el-d90; you do not need to disable Gatekeeper or other system protections. See [Apple’s instructions for opening a blocked app](https://support.apple.com/guide/mac-help/mh40617/mac).
 
-To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.18/el-d90-0.5.18-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
+To verify the download, save the [SHA-256 checksum file](https://github.com/djohn99/el-d90/releases/download/v0.5.19/el-d90-0.5.19-mac-arm64.dmg.sha256) beside the DMG and run this command in that directory:
 
 ```sh
-shasum -a 256 -c el-d90-0.5.18-mac-arm64.dmg.sha256
+shasum -a 256 -c el-d90-0.5.19-mac-arm64.dmg.sha256
 ```
 
 ## Screenshots
@@ -57,9 +57,9 @@ Deployment inspection with combined replica logs:
 
 *Captured from el-d90 0.5.1 in disconnected demo mode using sample data. No real cluster details or credentials are shown.*
 
-## New in 0.5.18
+## New in 0.5.19
 
-**0.5.18** fits resource tables to the window, adds compact Nodes metrics, and preserves column resizing. See the [complete release notes](docs/releases/0.5.18.md).
+**0.5.19** improves AWS SSO and EKS setup, adds Medium text size, and refreshes resource tables quietly while preserving row order. See the [complete release notes](docs/releases/0.5.19.md).
 
 Sidebar sections collapse and remember their state. Extra tools including Resource map, Metrics, Troubleshooting, Applications and Node sessions are available under **File → Workspace tools**. Custom Resources contains Definitions and searchable API groups directly.
 
@@ -74,7 +74,9 @@ Earlier workspace additions remain available:
 - **Extensions:** install, update, enable/disable and remove reviewed declarative JSON manifests. SDK v1 adds read-only resource pages, metadata/status details, columns and namespace-scoped map relations. No arbitrary JavaScript, HTML, network calls or commands are permitted. Headlamp plugins are not compatible. See [extension authoring](docs/extensions.md).
 - **Connect clusters:** inspect provider/client metadata, preview and import kubeconfig *paths*, connect with an exact-context/namespace read-only test and open the cluster automatically after success. Configured OIDC exec plugins may open their own browser login; provider registration and legacy-to-exec conversion remain external. Tokens, certificates, exec arguments and environment values are not returned to the wizard or copied into app settings.
 
-**Kubernetes read transport:** Resource lists, resource Events, raw API/metrics GETs and live watches use persistent, context-isolated Kubernetes API connections. Exec credentials are cached in memory until refresh is needed, with bounded plugin execution; kubeconfig CA, client certificates, TLS server names, configured proxies and impersonation settings are retained. Lists are paginated and Secret list data remains redacted. Permission failures are reported without switching identities. Terminals, logs, port forwarding, Helm, YAML apply/validation and other mutations retain their existing CLI paths. `EL_D90_KUBE_TRANSPORT=cli` is available as an explicit diagnostic compatibility override; test fixture binaries also use CLI mode unless API mode is explicitly requested. See the [read-transport measurements and validation](docs/performance-api-client.md).
+**Automatic refresh:** Workloads Overview and resource tables refresh every 15 seconds while visible. Current sort, row order, filters, page and scroll position are preserved during background updates.
+
+**Kubernetes read transport:** Resource lists, resource Events, and raw API/metrics GETs use persistent, context-isolated Kubernetes API connections. Exec credentials are cached in memory until refresh is needed, with bounded plugin execution; kubeconfig CA, client certificates, TLS server names, configured proxies and impersonation settings are retained. Lists are paginated and Secret list data remains redacted. Permission failures are reported without switching identities. Terminals, logs, port forwarding, Helm, YAML apply/validation and other mutations retain their existing CLI paths. `EL_D90_KUBE_TRANSPORT=cli` is available as an explicit diagnostic compatibility override; test fixture binaries also use CLI mode unless API mode is explicitly requested. See the [read-transport measurements and validation](docs/performance-api-client.md).
 
 **AWS SSO / EKS:** Open **File → Connect clusters → AWS SSO → EKS**. Sign in and discover your assigned accounts and roles, then choose an account and role. Selecting a role prepares its profile and loads EKS clusters automatically. Alternatively, select a saved AWS CLI profile and region and sign in if needed. Choose your cluster and click **Connect to cluster** to open its workspace automatically. If listing is restricted, enter a known cluster name. AWS CLI v2 manages credential caching and `eks get-token`; el-d90 never asks for copied access tokens.
 
@@ -263,7 +265,7 @@ Download official builds from [this repository’s Releases](https://github.com/
 
 ## Automated releases
 
-Pushing a `v*` version tag triggers [macOS and Windows release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.18` for version `0.5.18`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes both the DMG and Windows portable ZIP with SHA-256 checksums after both native build jobs pass. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
+Pushing a `v*` version tag triggers [macOS and Windows release](.github/workflows/release.yml). The tag must exactly match `package.json`, for example `v0.5.19` for version `0.5.19`. The workflow validates the runner/version, installs locked dependencies, runs backend and packaged desktop checks, ad-hoc signs the app, builds and verifies the drag-to-install DMG, records provenance, and publishes both the DMG and Windows portable ZIP with SHA-256 checksums after both native build jobs pass. Prerelease versions are marked as prereleases. Existing published release assets are never replaced by reruns.
 
 After committing your next changes:
 
@@ -277,6 +279,6 @@ The workflow uses GitHub’s temporary `GITHUB_TOKEN`; no personal access token 
 
 ## Windows x64
 
-Download the [Windows x64 portable ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.18/el-d90-0.5.18-windows-x64.zip) without signing in. Extract the **entire ZIP** into a folder you own, then open **el-d90.exe**. Requires Windows 10 1809+ or Windows 11 on Intel/AMD x64.
+Download the [Windows x64 portable ZIP](https://github.com/djohn99/el-d90/releases/download/v0.5.19/el-d90-0.5.19-windows-x64.zip) without signing in. Extract the **entire ZIP** into a folder you own, then open **el-d90.exe**. Requires Windows 10 1809+ or Windows 11 on Intel/AMD x64.
 
 Install kubectl.exe, AWS CLI v2 and Helm as needed on PATH; restart el-d90 afterward. The app is not Authenticode signed, so managed PCs may require administrator approval. See [Windows installation and validation](docs/windows-build.md).
