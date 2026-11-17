@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.23] - 2026-11-17
+
+- Keep the workspace, sidebar, and panels in the selected color family while preserving clear text, controls, and table headers.
+- Keep ready, waiting, and error container colors consistent across themes.
+- Compact paginated table controls, place the column menu at the far right, and move Pod metrics explanations into the CPU and memory column tooltips.
+
 ## [0.5.22] - 2026-11-16
 
 - Let paginated resource tables use the available workspace height, with scrolling inside the table.
