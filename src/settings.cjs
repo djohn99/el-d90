@@ -1,5 +1,6 @@
 // Local application preferences. Kubeconfig files are referenced, never copied.
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),YAML=require('yaml');
+const {generate}=require('./palette.js');
 const defaults=()=>({appearance:{theme:'dark',fontSize:13},kubeconfig:{paths:[]}});
 function normalize(value){
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Settings must be a YAML mapping');
@@ -14,6 +15,13 @@ function normalize(value){
  if(result.appearance.paletteMode!==undefined&&!['smart','advanced'].includes(result.appearance.paletteMode))throw Error('Palette mode must be smart or advanced');
  if(result.appearance.paletteSeed!==undefined&&(typeof result.appearance.paletteSeed!=='string'||!/^#[0-9a-fA-F]{6}$/.test(result.appearance.paletteSeed)))throw Error('Palette seed must be a #RRGGBB color');
  if(result.appearance.colors!==undefined){const colors=result.appearance.colors;if(!colors||typeof colors!=='object'||Array.isArray(colors))throw Error('Appearance colors must be a mapping');for(const [mode,palette]of Object.entries(colors)){if(!['dark','light'].includes(mode)||!palette||typeof palette!=='object'||Array.isArray(palette))throw Error('Colors must use dark and light palettes');for(const[key,color]of Object.entries(palette)){if(!['accent','background','sidebar','panel','text','muted'].includes(key)||typeof color!=='string'||!/^#[0-9a-fA-F]{6}$/.test(color))throw Error('Colors must use supported names and #RRGGBB values');}}}
+ const {paletteMode,paletteSeed,colors}=result.appearance;
+ if (paletteMode === 'smart' && paletteSeed && colors) {
+   const generated = generate(paletteSeed);
+   result.appearance.colors = Object.fromEntries(
+     Object.keys(colors).map(mode => [mode, generated[mode]])
+   );
+ }
  const paths=result.kubeconfig.paths;if(!Array.isArray(paths)||paths.length>16)throw Error('kubeconfig.paths must be a list of up to 16 paths');
  result.kubeconfig.paths=[...new Set(paths.map(p=>{if(typeof p!=='string'||!p||p.length>4096||/[\x00-\x1f:]/.test(p)||!(path.isAbsolute(p)||p.startsWith('~/')))throw Error('Use absolute kubeconfig paths or ~/ paths; do not use colon-separated paths');return p;}))];return result;
 }
