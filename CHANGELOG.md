@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.24] - 2026-11-17
+
+- Open actions from the three-dot menu or by right-clicking a row across Kubernetes resource lists and Helm releases. Menus offer operations appropriate to each resource.
+- Trigger a one-off Job from a Cron Job and suspend or resume Jobs from their row menus.
+- Read Cron Job schedules in plain language in the table and resource details. The original cron expression remains available in the tooltip, details, and CSV export.
+
 ## [0.5.23] - 2026-11-17
 
 - Keep the workspace, sidebar, and panels in the selected color family while preserving clear text, controls, and table headers.
