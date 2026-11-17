@@ -1,13 +1,22 @@
 (()=>{
  const q=id=>document.getElementById(id),media=matchMedia('(prefers-color-scheme: light)');let settings={appearance:{theme:'dark',fontSize:13},kubeconfig:{paths:[]}},invoke,committed,committedYaml;
  const colorKeys={accent:'--accent',background:'--bg',sidebar:'--side',panel:'--panel',text:'--text',muted:'--muted'};
- const overrides=['--accent','--lime','--green','--bg','--side','--panel','--text','--muted','--surface','--hover','--input','--table-head','--selected','--line','--map-node','--map-border','--button-text'];
+ const overrides=['--accent','--lime','--bg','--side','--panel','--text','--muted','--surface','--hover','--input','--table-head','--selected','--line','--map-node','--map-border','--button-text'];
  const rgb=hex=>hex.slice(1).match(/../g).map(x=>parseInt(x,16));
  const mix=(a,b,n)=>'#'+rgb(a).map((v,i)=>Math.round(v*(1-n)+rgb(b)[i]*n).toString(16).padStart(2,'0')).join('');
  const hex=value=>{value=value.trim();if(/^#[0-9a-f]{6}$/i.test(value))return value.toLowerCase();if(/^#[0-9a-f]{3}$/i.test(value))return '#'+value.slice(1).split('').map(c=>c+c).join('').toLowerCase();const m=value.match(/\d+/g);return m?.length>=3?'#'+m.slice(0,3).map(n=>Math.max(0,Math.min(255,Number(n))).toString(16).padStart(2,'0')).join(''):'#000000';};
  const mode=()=>document.documentElement.dataset.theme;
  function apply(value){settings=value;const root=document.documentElement,choice=value.appearance.theme;root.dataset.theme=choice==='system'?(media.matches?'light':'dark'):choice;root.style.setProperty('--ui-size',value.appearance.fontSize+'px');overrides.forEach(key=>root.style.removeProperty(key));const palette=value.appearance.colors?.[mode()]||{};for(const[key,color]of Object.entries(palette))root.style.setProperty(colorKeys[key],color);const css=getComputedStyle(root),read=key=>hex(css.getPropertyValue(key));const accent=palette.accent||read('--accent'),bg=palette.background||read('--bg'),text=palette.text||read('--text'),panel=palette.panel||read('--panel');
- if(Object.keys(palette).length){const derived={'--surface':panel,'--input':panel,'--table-head':mix(panel,text,.07),'--hover':mix(panel,accent,.15),'--selected':mix(panel,accent,.22),'--line':mix(bg,text,.28),'--map-node':mix(panel,accent,.2),'--map-border':accent};if(palette.accent)Object.assign(derived,{'--lime':accent,'--green':accent});const luminance=rgb(palette.accent||read('--lime')).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);derived['--button-text']=luminance>.179?'#101519':'#ffffff';for(const[key,color]of Object.entries(derived))root.style.setProperty(key,color);}
+ if(Object.keys(palette).length){const derived={'--hover':mix(panel,accent,.08),'--selected':mix(panel,accent,.12),'--map-node':mix(panel,accent,.2),'--map-border':accent};
+ // Smart palettes keep the built-in contrast between fields, headers, and borders.
+ if(value.appearance.paletteMode!=='smart'){
+   Object.assign(derived,{
+     '--surface':mix(panel,text,.025),
+     '--input':panel,
+     '--table-head':mix(panel,text,.07),
+     '--line':mix(bg,text,mode()==='dark'?.13:.23)
+   });
+ }if(palette.accent)Object.assign(derived,{'--lime':accent});const luminance=rgb(palette.accent||read('--lime')).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);derived['--button-text']=luminance>.179?'#101519':'#ffffff';for(const[key,color]of Object.entries(derived))root.style.setProperty(key,color);}
  window.dispatchEvent(new CustomEvent('eld90-appearance',{detail:value.appearance}));}
  media.addEventListener('change',()=>{if(settings.appearance.theme==='system'){apply(settings);form();}});
  function form(){q('settings-theme').value=settings.appearance.theme;q('settings-font-size').value=String(settings.appearance.fontSize);const css=getComputedStyle(document.documentElement);for(const[key,variable]of Object.entries(colorKeys)){const value=css.getPropertyValue(variable).trim();if(document.activeElement!==q('settings-color-'+key))q('settings-color-'+key).value=hex(value);}q('settings-color-mode').textContent='Editing '+mode()+' theme colors.';q('settings-palette-mode').value=settings.appearance.paletteMode||'smart';if(document.activeElement!==q('settings-smart-seed'))q('settings-smart-seed').value=settings.appearance.paletteSeed||'#8cc6ac';q('settings-advanced-colors').open=q('settings-palette-mode').value==='advanced';q('smart-palette-help').hidden=q('settings-palette-mode').value!=='smart';}
