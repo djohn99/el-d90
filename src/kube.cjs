@@ -152,16 +152,21 @@ async function apply(input, dryRun) {
   args.push(...(dryRun ? ['--dry-run=server'] : []), '-f', '-');
   return run(args, { input: input.yaml });
 }
+const directlyLoggedWorkloads = new Set(['statefulsets', 'daemonsets', 'replicasets', 'replicationcontrollers', 'jobs']);
 function logArgs(input) {
-  const args = ['logs', name(input.name), ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0', '--tail=300', '--timestamps=true'];
+  const workload = directlyLoggedWorkloads.has(input.resource);
+  const target = name(input.name);
+  const args = ['logs', workload ? `${input.resource}/${target}` : target, ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0', '--tail=300', '--timestamps=true'];
+  if (workload) args.push('--all-pods=true', '--prefix=true', '--max-log-requests=20');
   if (input.container) args.push('--container', name(input.container, 'container'));
   if (input.previous) args.push('--previous');
   if (input.follow) args.push('--follow');
   return args;
 }
 function terminalArgs(input) {
-  const args = ['exec', '-it', name(input.name), ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0'];
+  const args = [input.attach === true ? 'attach' : 'exec', '-it', name(input.name), ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0'];
   if (input.container) args.push('--container', name(input.container, 'container'));
+  if (input.attach === true) return args;
   const shell = input.shell === '/bin/bash' ? '/bin/bash' : '/bin/sh';
   return [...args, '--', shell];
 }
@@ -243,4 +248,4 @@ function forwardArgs(input) {
   for (const port of [input.localPort, input.remotePort]) if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Ports must be integers between 1 and 65535');
   return ['port-forward', input.resource + '/' + name(input.name), input.localPort + ':' + input.remotePort, ...scope(input, input.resource, true).filter(arg => !arg.startsWith('--request-timeout=')), '--address=127.0.0.1'];
 }
-module.exports = { api, pagedList, listPath, setKubeconfigPaths, RESOURCES, string, name, resource, scope, environment, executable, run, contexts, list, yaml, apply, logArgs, terminalArgs, parseDiscovery, discover, metrics, helmList, helmManifest, actionArgs, forwardArgs, selectedNamespaces, findHelm };
+module.exports = { api, pagedList, listPath, setKubeconfigPaths, RESOURCES, string, name, resource, scope, environment, executable, run, contexts, list, yaml, apply, logArgs, terminalArgs, directlyLoggedWorkloads, parseDiscovery, discover, metrics, helmList, helmManifest, actionArgs, forwardArgs, selectedNamespaces, findHelm };

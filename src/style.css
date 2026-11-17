@@ -189,3 +189,37 @@ main:has(.compact-resource-content #resource-view:not(.hidden) #resource-table >
 .compact-resource-content:has(#resource-view:not(.hidden) #resource-table > .virtual-table-scroll) .content-footer {
   margin-top: 12px;
 }
+
+.resource-row-menu-button{
+  min-width:28px;
+  min-height:28px;
+  padding:0 5px;
+  color:var(--text);
+  border:1px solid var(--line);
+  border-radius:5px;
+  font-size:20px;
+  line-height:1;
+}
+.resource-row-menu-button:hover,.resource-row-menu button:hover{background:var(--hover)}
+.resource-row-menu{
+  position:fixed;
+  inset:auto;
+  margin:0;
+  min-width:132px;
+  overflow:auto;
+  padding:4px;
+  background:var(--panel);
+  color:var(--text);
+  border:1px solid var(--line);
+  border-radius:6px;
+  box-shadow:0 6px 18px #0005;
+}
+.resource-row-menu button{
+  display:block;
+  width:100%;
+  padding:6px 10px;
+  text-align:left;
+  border:0;
+}
+
+.crd-grid article > .resource-row-actions{float:right;margin-left:8px}

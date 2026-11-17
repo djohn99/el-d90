@@ -87,15 +87,33 @@ async function initializeContext(context) {
   } catch (e) { if (state.context === selected) { state.namespaceError = `Namespace list unavailable: ${e.message}\nEnter a namespace below to browse resources allowed by your permissions.`; $('namespace-warning').textContent = state.namespaceError; hidden('namespace-warning', false); hidden('namespace-manual', false); } }
   if (state.context === selected) { await discovery; if(state.context === selected) { state.initialized=true; await refresh(); saveWorkspacePreferences(); } }
 }
+const workloadRowActions = new Map([
+  ['pods', [['logs', 'Logs'], ['shell', 'Shell'], ['attach', 'Attach to Pod']]],
+  ['deployments', [['logs', 'Logs'], ['scale', 'Scale'], ['restart', 'Restart']]],
+  ['statefulsets', [['logs', 'Logs'], ['scale', 'Scale'], ['restart', 'Restart']]],
+  ['daemonsets', [['logs', 'Logs'], ['restart', 'Restart']]],
+  ['replicasets', [['logs', 'Logs'], ['scale', 'Scale']]],
+  ['replicationcontrollers', [['logs', 'Logs'], ['scale', 'Scale']]],
+  ['jobs', [['logs', 'Logs']]],
+  ['cronjobs', [['trigger', 'Trigger']]]
+]);
 function renderTable(target, items, kind, max = Infinity, preserveOrder = false) {
   const enhance = (container, options) => window.elD90Productivity.enhanceTable(container, {
     ...options, preserveOrder, rowKey: row => resourceRowKey(items[Number(row.dataset.index)])
   });
-  if(kind==='pods')return window.elD90PodTable.render($(target),items.slice(0,max),state.podTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:pod=>openDetail(pod,'pods'),enhance,preserveOrder,onExport:text=>invoke('file:save',{text})});
-  if(kind==='nodes')return window.elD90NodeTable.render($(target),items.slice(0,max),state.nodeTableData||{},{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,onOpen:node=>openDetail(node,'nodes'),onShell:async node=>{await openDetail(node,'nodes');await tab('terminal');},enhance,preserveOrder,onExport:text=>invoke('file:save',{text})});
-  if(kind==='customresourcedefinitions')return renderCustomDefinitions(target,items);
-  if(kind==='events'||kind?.startsWith('events.'))return renderEventsTable(target,items,max,preserveOrder);
-  return window.elD90Columns.render($(target),items.slice(0,max),kind,{extraColumns:extensionColumns(kind),extensionField:window.elD90ExtensionModel.field,escape,age,health,onOpen:object=>openDetail(object,kind),enhance,preserveOrder,onExport:text=>invoke('file:save',{text})});
+  const options = {
+    extraColumns: extensionColumns(kind), extensionField: window.elD90ExtensionModel.field,
+    escape, age, health, onOpen: object => openDetail(object, kind),
+    actions: object => resourceRowMenu(kind, object),
+    onAction: (object, action) => resourceRowAction(kind, object, action),
+    enhance, preserveOrder, onExport: text => invoke('file:save', {text})
+  };
+  const container = $(target), rows = items.slice(0, max);
+  if (kind === 'pods') return window.elD90PodTable.render(container, rows, state.podTableData || {}, options);
+  if (kind === 'nodes') return window.elD90NodeTable.render(container, rows, state.nodeTableData || {}, options);
+  if (kind === 'customresourcedefinitions') return renderCustomDefinitions(target, items);
+  if (kind === 'events' || kind.startsWith('events.')) return renderEventsTable(target, items, max, preserveOrder);
+  return window.elD90Columns.render(container, rows, kind, options);
 }
 function renderOverview(results, preserveOrder = false) {
   const [pods, deployments, nodes, events] = results.map(r => r.status === 'fulfilled' ? r.value.items || [] : []);
@@ -678,6 +696,88 @@ setInterval(async()=>{
   }));
 },30000);
 
+function resourceRowMenu(kind, object) {
+  if (kind === 'helm') {
+    return [['manifest', 'View manifest'], ['helm-upgrade-form', 'Upgrade'], ['helm-load-history', 'History / Rollback'], ['helm-uninstall', 'Uninstall']];
+  }
+  if (kind === 'events') return [['details', 'View details'], ['manifest', 'View YAML']];
+  const actions = [...(workloadRowActions.get(kind) || [])];
+  if (kind === 'jobs' || kind === 'cronjobs') {
+    actions.push(object.spec?.suspend ? ['resume', 'Resume'] : ['suspend', 'Suspend']);
+  }
+  if (kind === 'pods' || kind === 'services') actions.push(['forward', 'Port forward']);
+  if (kind === 'configmaps') actions.push(['configmap-edit-data', object.immutable ? 'View data' : 'Edit data']);
+  if (kind === 'secrets') actions.push(['secret-values', 'View keys / values']);
+  if (kind === 'nodes') actions.push(
+    ['node-shell', 'Shell'], ['node-access', 'SSH / Debug'],
+    object.spec?.unschedulable ? ['uncordon', 'Uncordon'] : ['cordon', 'Cordon'],
+    ['resource-confirm-name', 'Drain']
+  );
+  if (kind === 'customresourcedefinitions' && state.catalogue.some(entry => entry.key === object.metadata.name)) {
+    actions.push(['browse-resources', 'Browse resources']);
+  }
+  return [...actions, ['describe-resource', 'Describe'], ['edit', 'Edit'], ['delete', 'Delete']];
+}
+async function resourceRowAction(kind, object, action) {
+  const owner = state;
+  const {name, namespace, uid} = object.metadata;
+  const target = {context: owner.context, resource: kind, namespace, name};
+  try {
+    if (action === 'browse-resources') {
+      await browseCustomResource(name);
+      return;
+    }
+    const detailTab = {
+      edit: 'yaml', manifest: 'yaml', forward: 'forward',
+      'node-shell': 'terminal', 'node-access': 'node-access', details: 'summary'
+    }[action] || (owner.demo && action === 'logs' && ['pods', 'deployments'].includes(kind) ? 'logs' : null);
+    const detailControl = {
+      scale: 'scale-replicas', 'describe-resource': 'describe-resource',
+      'configmap-edit-data': object.immutable ? 'configmap-data' : 'configmap-edit-data',
+      'secret-values': 'secret-reveal', 'resource-confirm-name': 'resource-confirm-name',
+      'helm-upgrade-form': 'helm-upgrade-form', 'helm-load-history': 'helm-load-history',
+      'helm-uninstall': 'helm-uninstall'
+    }[action];
+    if (detailTab || detailControl) {
+      await openDetail(object, kind);
+      if (state !== owner || state.selectedKind !== kind || state.selected?.metadata.name !== name ||
+          state.selected.metadata.namespace !== namespace || state.selected.metadata.uid !== uid) return;
+      if (detailTab && detailTab !== 'summary') await tab(detailTab);
+      const control = detailControl && $(detailControl);
+      if (control) {
+        control.scrollIntoView({block: 'nearest'});
+        control.focus();
+        if (action === 'scale') control.select();
+        if (['describe-resource', 'configmap-edit-data', 'helm-load-history', 'helm-uninstall'].includes(action)) control.click();
+      }
+      return;
+    }
+    if (owner.demo) {
+      notice('Demo mode: no resources are changed.', true);
+      return;
+    }
+    if (action === 'logs' || action === 'shell' || action === 'attach') {
+      const containers = object.spec?.containers || [];
+      const preferred = object.metadata.annotations?.['kubectl.kubernetes.io/default-container'];
+      const container = containers.find(item => item.name === preferred)?.name || containers[0]?.name;
+      if (action === 'logs') {
+        await sessionUI.openLogs({...target, container: kind === 'pods' ? container : kind === 'deployments' ? '*' : undefined});
+      } else {
+        await sessionUI.openTerminal({...target, container, attach: action === 'attach'});
+      }
+      if (state === owner) sessionUI.show();
+      return;
+    }
+    const channel = action === 'restart' ? 'kube:action' : 'resource:action';
+    const result = await invoke(channel, {...target, action});
+    if (result.cancelled || state !== owner) return;
+    await refresh();
+    if (state === owner) notice(result.output, true);
+  } catch (e) {
+    if (state === owner) error(e);
+  }
+}
+
 function addManagementActions(object,kind) {
   const node=kind==='nodes',cron=kind==='cronjobs';
   $('detail-summary').insertAdjacentHTML('beforeend',`<h3>Resource management</h3><div class="workload-actions"><button id="describe-resource" class="button secondary">Describe</button>${['deployments','statefulsets','daemonsets'].includes(kind)?'<button id="rollout-status" class="button secondary">Rollout status</button>':''}${node?'<button class="button secondary node-action" data-action="cordon">Cordon</button><button class="button secondary node-action" data-action="uncordon">Uncordon</button><button class="danger-button node-action" data-action="drain">Drain node</button>':''}${cron?`<button class="button secondary node-action" data-action="${object.spec?.suspend?'resume':'suspend'}">${object.spec?.suspend?'Resume schedule':'Suspend schedule'}</button>`:''}<button id="delete-resource" class="danger-button">Delete resource</button></div>${node?`<label class="confirm-name-label">For node drain, type the exact node name<input id="resource-confirm-name" aria-label="Confirm resource name" placeholder="${escape(object.metadata.name)}"></label>`:''}<pre id="resource-management-output" class="console management-output" role="status"></pre>`);
@@ -782,13 +882,15 @@ function renderEventsTable(target,items,max=Infinity,preserveOrder=false){
    ...options, preserveOrder, rowKey: row => resourceRowKey(rows[Number(row.dataset.index)])
  });
  if(!rows.length){container.innerHTML='<div class="empty">No retained events match this view. Check the namespace selection and search. Kubernetes events expire; this is not an audit history.</div>';return;}
- const headers=['Type','Reason','Object','Namespace','Message','Count','Last seen'].map(c=>'<th>'+c+'</th>'),help='<p class="events-help">Newest events first · select a row for full details · Kubernetes retains events for a limited time.</p>';
- const values=event=>{const e=window.elD90Events.normalize(event);return[e.type,e.reason,e.object,e.namespace,e.message,e.count,age(e.last)+' ago'];};
- const row=(event,i)=>{const e=window.elD90Events.normalize(event);return `<tr role="button" tabindex="0" data-index="${i}" aria-label="Event ${escape(e.reason)} ${escape(e.object)}">${values(event).map((v,j)=>'<td'+(j===4?' class="event-message"':'')+'>'+(j===0?'<span class="pill '+(e.type==='Warning'?'red':'green')+'">'+escape(v)+'</span>':escape(v))+'</td>').join('')}</tr>`;};
- const tableOptions={storageKey:'events-v2',onExport:text=>invoke('file:save',{text})};
- if(rows.length>50)return window.elD90VirtualTable.mount(container,{items:rows,headers,help,className:'events-table',row,values,open:event=>openDetail(event,'events'),enhance,preserveOrder,tableOptions});
+ const menu = window.elD90RowActions({escape, enhance, actions: event => resourceRowMenu('events', event),
+   onOpen: event => openDetail(event, 'events'), onAction: (event, action) => resourceRowAction('events', event, action)});
+ const headers=['Type','Reason','Object','Namespace','Message','Count','Last seen','Actions'].map(c=>'<th>'+c+'</th>'),help='<p class="events-help">Newest events first · select a row for full details · Kubernetes retains events for a limited time.</p>';
+ const values=event=>{const e=window.elD90Events.normalize(event);return[e.type,e.reason,e.object,e.namespace,e.message,e.count,age(e.last)+' ago',''];};
+ const row=(event,i)=>{const e=window.elD90Events.normalize(event);return `<tr role="button" tabindex="0" data-index="${i}" aria-label="Event ${escape(e.reason)} ${escape(e.object)}">${values(event).map((v,j)=>'<td'+(j===4?' class="event-message"':'')+'>'+(j===0?'<span class="pill '+(e.type==='Warning'?'red':'green')+'">'+escape(v)+'</span>':j===7?menu.markup(event,i):escape(v))+'</td>').join('')}</tr>`;};
+ const tableOptions={storageKey:'events-v2',lockedColumns:[7],onExport:text=>invoke('file:save',{text})};
+ if(rows.length>50)return window.elD90VirtualTable.mount(container,{items:rows,headers,help,className:'events-table',row,values,open:menu.open,enhance:menu.enhance,preserveOrder,tableOptions});
  container.innerHTML=help+'<table class="events-table"><thead><tr>'+headers.join('')+'</tr></thead><tbody>'+rows.map(row).join('')+'</tbody></table>';
- container.querySelectorAll('tbody tr').forEach(r=>{r.onclick=()=>openDetail(rows[Number(r.dataset.index)],'events');r.onkeydown=e=>{if(e.key==='Enter')r.click();};});enhance(container,tableOptions);
+ container.querySelectorAll('tbody tr').forEach(r=>{r.onclick=event=>menu.open(rows[Number(r.dataset.index)],event);r.onkeydown=e=>{if(e.target===r && e.key==='Enter')r.click();};});menu.enhance(container,tableOptions);
 }
 async function loadResourceEvents(){const owner=state,object=owner.selected,epoch=owner.detailGeneration;const container=$('detail-events');container.innerHTML='<p>Loading events for this resource…</p>';try{if(!object?.metadata?.uid)throw Error('This resource has no UID for event lookup');const result=owner.demo?{items:[]}:await invoke('resource:events',{context:owner.context,namespace:object.metadata.namespace||'*',uid:object.metadata.uid});if(state!==owner||epoch!==owner.detailGeneration)return;container.innerHTML='<p>Events for this exact resource UID. Related Pods and ReplicaSets have their own events.</p><button id="refresh-resource-events" class="button secondary">Refresh events</button><div id="resource-events-table"></div>';renderEventsTable('resource-events-table',result.items||[]);$('refresh-resource-events').onclick=loadResourceEvents;}catch(e){if(state===owner&&epoch===owner.detailGeneration)container.textContent='Events unavailable: '+e.message;}}
 
@@ -796,11 +898,25 @@ sessionUI=window.elD90Sessions.create({invoke,subscribe:callback=>window.eld90.o
 $('open-log-session').onclick=async()=>{try{const request={...detailInput(),container:$('log-container').value,previous:$('previous-logs').checked};await sessionUI.openLogs(request);await closeDrawer();sessionUI.show();}catch(e){error(e);}};
 $('open-terminal-session').onclick=async()=>{try{const request={...detailInput(),container:$('terminal-container').value,shell:$('terminal-shell').value};await sessionUI.openTerminal(request);await closeDrawer();sessionUI.show();}catch(e){error(e);}};
 
+function browseCustomResource(key) {
+  state.dynamicResource = key;
+  $('resource-type').value = key;
+  updateResourceInfo();
+  return navigate('resources');
+}
 function renderCustomDefinitions(target,items){
  const groups=new Map();for(const r of [...items].sort((a,b)=>a.metadata.name.localeCompare(b.metadata.name))){const key=r.spec?.group||r.metadata.name.split('.').slice(1).join('.')||'Other';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);}
- const byName=new Map(items.map(r=>[r.metadata.name,r]));$(target).innerHTML=[...groups].sort(([a],[b])=>a.localeCompare(b)).map(([group,rows])=>`<details class="crd-group" open><summary>${escape(group)} <small>${rows.length} definitions</small></summary><div class="crd-grid">${rows.map(r=>`<article><h3>${escape(r.spec?.names?.kind||r.metadata.name)}</h3><p>${escape(r.spec?.scope||'Unknown scope')} · ${escape((r.spec?.versions||[]).filter(v=>v.served).map(v=>v.name).join(', '))}</p><p>${escape(r.metadata.name)}</p><button class="button secondary" data-crd-open="${escape(r.metadata.name)}">Definition / YAML</button>${state.catalogue.some(c=>c.key===r.metadata.name)?`<button class="button secondary" data-crd-browse="${escape(r.metadata.name)}">Browse resources</button>`:''}</article>`).join('')}</div></details>`).join('')||'<div class="empty">No custom resource definitions available.</div>';
+ const byName=new Map(items.map(r=>[r.metadata.name,r])), indexes=new Map(items.map((r,i)=>[r.metadata.name,i]));
+ const menu = window.elD90RowActions({escape, actions: object => resourceRowMenu('customresourcedefinitions', object),
+   onAction: (object, action) => resourceRowAction('customresourcedefinitions', object, action)});
+ const container = $(target);
+ container.innerHTML=[...groups].sort(([a],[b])=>a.localeCompare(b)).map(([group,rows])=>`<details class="crd-group" open><summary>${escape(group)} <small>${rows.length} definitions</small></summary><div class="crd-grid">${rows.map(r=>`<article data-crd-card="${escape(r.metadata.name)}">${menu.markup(r,indexes.get(r.metadata.name))}<h3>${escape(r.spec?.names?.kind||r.metadata.name)}</h3><p>${escape(r.spec?.scope||'Unknown scope')} · ${escape((r.spec?.versions||[]).filter(v=>v.served).map(v=>v.name).join(', '))}</p><p>${escape(r.metadata.name)}</p><button class="button secondary" data-crd-open="${escape(r.metadata.name)}">Definition / YAML</button>${state.catalogue.some(c=>c.key===r.metadata.name)?`<button class="button secondary" data-crd-browse="${escape(r.metadata.name)}">Browse resources</button>`:''}</article>`).join('')}</div></details>`).join('')||'<div class="empty">No custom resource definitions available.</div>';
  $(target).querySelectorAll('[data-crd-open]').forEach(b=>b.onclick=()=>openDetail(byName.get(b.dataset.crdOpen),'customresourcedefinitions'));
- $(target).querySelectorAll('[data-crd-browse]').forEach(b=>b.onclick=()=>{state.dynamicResource=b.dataset.crdBrowse;$('resource-type').value=state.dynamicResource;updateResourceInfo();navigate('resources');});
+ container.querySelectorAll('[data-crd-browse]').forEach(b=>b.onclick=()=>browseCustomResource(b.dataset.crdBrowse));
+ container.querySelectorAll('.crd-grid').forEach(group => menu.bindContext(group,'[data-crd-card]'));
+ container.querySelectorAll('.resource-row-actions').forEach(actions => {
+   actions.onclick = event => menu.open(byName.get(actions.closest('[data-crd-card]').dataset.crdCard), event);
+ });
 }
 window.addEventListener('eld90-appearance',()=>{const options=window.elD90Settings.terminal();for(const owner of clusterWorkspaces.values())if(owner.terminalInstance){Object.assign(owner.terminalInstance.options,options);owner.fitAddon?.fit();}for(const s of sessionUI?.all.values()||[])if(s.term){Object.assign(s.term.options,options);s.fit?.fit();}});
 
