@@ -1,6 +1,7 @@
 // Original context-bound resource operations for el-d90.
 // The main process must present validate().confirmation before perform().
 const kube = require('./kube.cjs');
+const { randomUUID } = require('node:crypto');
 
 const HIGH_RISK_DELETE = new Set(['namespaces', 'nodes', 'persistentvolumes', 'persistentvolumeclaims', 'secrets', 'customresourcedefinitions']);
 const ROLLOUT_RESOURCES = new Set(['deployments', 'statefulsets', 'daemonsets']);
@@ -35,10 +36,18 @@ function validate(input) {
       impact += ' Gracefully evicts eligible pods while respecting disruption budgets. Pods with local emptyDir data or unmanaged pods can block the drain; el-d90 will not force them out.';
       highRisk = true; timeout = 330000;
     }
+  } else if (action === 'trigger') {
+    if (t.resource !== 'cronjobs') throw new Error('Trigger requires a CronJob');
+    const prefix = t.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 43);
+    const job = `${prefix}-manual-${randomUUID().slice(0, 12)}`;
+    args = ['create', 'job', job, `--from=cronjob/${t.name}`, ...t.flags];
+    impact = 'Creates a one-off Job from this CronJob template in the selected namespace.';
   } else if (action === 'suspend' || action === 'resume') {
-    if (t.resource !== 'cronjobs') throw new Error('Suspend/resume requires a CronJob');
-    args = ['patch', 'cronjobs', t.name, ...t.flags, '--type=merge', '-p', JSON.stringify({ spec: { suspend: action === 'suspend' } })];
-    impact = action === 'suspend' ? 'Stops future scheduled Job creation. Existing Jobs keep running.' : 'Allows this CronJob to create scheduled Jobs again.';
+    if (!['jobs', 'cronjobs'].includes(t.resource)) throw new Error('Suspend/resume requires a Job or CronJob');
+    args = ['patch', t.resource, t.name, ...t.flags, '--type=merge', '-p', JSON.stringify({ spec: { suspend: action === 'suspend' } })];
+    impact = t.resource === 'jobs'
+      ? (action === 'suspend' ? 'Pauses this Job and terminates its active Pods.' : 'Allows this Job to create Pods again.')
+      : (action === 'suspend' ? 'Stops future scheduled Job creation. Existing Jobs keep running.' : 'Allows this CronJob to create scheduled Jobs again.');
   } else {
     throw new Error('Unsupported resource action');
   }

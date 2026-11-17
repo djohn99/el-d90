@@ -73,12 +73,27 @@ test('cordon and uncordon apply to one named node with a context', () => {
   }
 });
 
-test('CronJob suspend/resume is a merge patch with no arbitrary caller JSON', () => {
-  for (const action of ['suspend', 'resume']) {
-    const operation = actions.validate({ ...base, resource: 'cronjobs', action, patch: 'arbitrary-input-is-ignored' });
-    assert.deepEqual(JSON.parse(operation.args[operation.args.indexOf('-p') + 1]), { spec: { suspend: action === 'suspend' } });
+test('Job and CronJob suspend/resume use a fixed merge patch', () => {
+  for (const resource of ['jobs', 'cronjobs']) {
+    for (const action of ['suspend', 'resume']) {
+      const operation = actions.validate({ ...base, resource, action, patch: 'arbitrary-input-is-ignored' });
+      assert.equal(operation.args[1], resource);
+      assert.deepEqual(JSON.parse(operation.args[operation.args.indexOf('-p') + 1]), { spec: { suspend: action === 'suspend' } });
+    }
   }
   assert.throws(() => actions.validate({ ...base, action: 'suspend' }), /CronJob/);
+});
+
+test('CronJob trigger creates one uniquely named Job in the exact context and namespace', async () => {
+  const input = { ...base, resource: 'cronjobs', name: 'backup', action: 'trigger' };
+  const args = JSON.parse((await actions.perform(input)).output);
+  assert.deepEqual(args.slice(0, 2), ['create', 'job']);
+  assert.match(args[2], /^backup-manual-[a-f0-9-]{12}$/);
+  assert.equal(args[3], '--from=cronjob/backup');
+  assert.equal(args[args.indexOf('--context') + 1], 'cluster-blue');
+  assert.equal(args[args.indexOf('--namespace') + 1], 'team-a');
+  assert.throws(() => actions.validate({ ...input, resource: 'pods' }), /CronJob/);
+  assert.throws(() => actions.validate({ ...input, namespace: '*' }));
 });
 
 test('perform runs only the validated argv against an offline executable', async () => {

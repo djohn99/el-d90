@@ -1,6 +1,53 @@
 const{_electron}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpdir(),'eld90-columns-'));let app;const wait=ms=>new Promise(r=>setTimeout(r,ms));
 (async()=>{try{app=await _electron.launch({executablePath:process.env.EL_D90_APP_EXECUTABLE||require('electron'),args:[...(process.env.EL_D90_APP_EXECUTABLE?[]:[root]),'--demo'],cwd:root,env:{...process.env,ELECTRON_RUN_AS_NODE:'',EL_D90_USER_DATA:profile}});const js=code=>app.evaluate(({BrowserWindow},code)=>BrowserWindow.getAllWindows()[0]?.webContents.executeJavaScript(code)??null,code),click=s=>js(`document.querySelector(${JSON.stringify(s)}).click()`);async function until(code){for(let i=0;i<100;i++){if(await js(code))return;await wait(100);}throw Error('Timed out: '+code);}await until(`typeof state!=='undefined'&&state.initialized`);
 await js(`document.querySelector('.sidebar-group[data-group="WORKLOADS"]').open=true`);await click('[data-view="pods"]');await until(`document.querySelector('.pods-table')&&!state.loading`);assert.ok(await js(`!!document.querySelector('th[data-pod-column="controller"]')`));await click('.table-columns summary');await js(`{const c=document.querySelector('[aria-label="Show Node column"]');c.checked=false;c.dispatchEvent(new Event('change'));}`);assert.equal(await js(`document.querySelector('th[data-pod-column="node"]').hidden`),true);await click('[data-view="nodes"]');await until(`document.querySelector('.nodes-table')&&!state.loading`);assert.ok(await js(`document.querySelectorAll('.nodes-table [role="progressbar"][aria-label="CPU usage"]').length>0`));assert.ok(await js(`document.querySelectorAll('.nodes-table [role="progressbar"][aria-label="Memory usage"]').length>0`));await click('.table-columns summary');assert.equal(await js(`document.querySelector('[aria-label="Show Name column"]').disabled`),true);await js(`{const c=document.querySelector('[aria-label="Show Instance Type column"]');c.checked=true;c.dispatchEvent(new Event('change'));}`);assert.equal(await js(`document.querySelector('th[data-node-column="instance"]').hidden`),false);await click('[data-view="pods"]');await until(`document.querySelector('.pods-table')&&!state.loading`);assert.equal(await js(`document.querySelector('th[data-pod-column="node"]').hidden`),true);
+await click('[data-view="cronjobs"]');
+await until(`document.querySelector('.resource-row-menu-button') && !state.loading`);
+const page = await app.firstWindow();
+const scheduleCell = page.locator('td[data-resource-column="spec.schedule"]').first();
+assert.equal(await scheduleCell.textContent(), 'At 02:00');
+assert.match(await scheduleCell.getAttribute('title'), /0 2 \* \* \*/);
+await page.getByRole('button', {name:'Open database-backup',exact:true}).click();
+assert.equal(await page.locator('[data-summary-field="schedule"]').textContent(), 'At 02:00');
+assert.equal(await page.locator('[data-summary-field="schedule expression"]').textContent(), '0 2 * * *');
+await click('#close-drawer');
+await page.getByRole('button', {name: 'Actions for database-backup'}).click();
+const menu = page.locator('.resource-row-menu:popover-open');
+assert.deepEqual(await menu.getByRole('button').allTextContents(), ['Trigger', 'Suspend', 'Describe', 'Edit', 'Delete']);
+assert.equal(await page.locator('#drawer').isVisible(), false);
+await menu.getByRole('button', {name: 'Trigger'}).click();
+await until(`document.querySelector('#notice').textContent.includes('Demo mode: no resources are changed')`);
+await page.getByRole('button', {name: 'Open database-backup', exact: true}).click({button: 'right'});
+await menu.getByRole('button', {name: 'Edit'}).click();
+await until(`state.tab === 'yaml' && document.querySelector('#yaml-editor').value.includes('database-backup')`);
+await click('#close-drawer');
+await click('[data-view="pods"]');
+await until(`document.querySelector('#resource-table .pods-table .resource-row-menu-button') && !state.loading`);
+await page.locator('#resource-table .pods-table .resource-row-menu-button').first().click();
+assert.deepEqual(await menu.getByRole('button').allTextContents(), ['Logs', 'Shell', 'Attach to Pod', 'Port forward', 'Describe', 'Edit', 'Delete']);
+await page.keyboard.press('Escape');
+await click('[data-view="deployments"]');
+await until(`document.querySelector('#resource-table .resource-row-menu-button') && !state.loading`);
+await page.locator('#resource-table tr[data-index]').first().click({button:'right'});
+assert.deepEqual(await menu.getByRole('button').allTextContents(), ['Logs', 'Scale', 'Restart', 'Describe', 'Edit', 'Delete']);
+await menu.getByRole('button', {name:'Scale'}).click();
+await until(`document.activeElement?.id === 'scale-replicas'`);
+await click('#close-drawer');
+for (const [view, expected] of [
+  ['configmaps', ['Edit data', 'Describe', 'Edit', 'Delete']],
+  ['secrets', ['View keys / values', 'Describe', 'Edit', 'Delete']],
+  ['services', ['Port forward', 'Describe', 'Edit', 'Delete']],
+  ['storageclasses', ['Describe', 'Edit', 'Delete']],
+  ['nodes', ['Shell', 'SSH / Debug', 'Cordon', 'Drain', 'Describe', 'Edit', 'Delete']],
+  ['events', ['View details', 'View YAML']]
+]) {
+  await click(`[data-view="${view}"]`);
+  await until(`state.view === '${view}' && !state.loading && document.querySelector('#resource-table .resource-row-menu-button')`);
+  await page.locator('#resource-table .resource-row-menu-button').first().click();
+  assert.deepEqual(await menu.getByRole('button').allTextContents(), expected, view);
+  await page.keyboard.press('Escape');
+}
+
 const results=await js(`(()=>{const host=document.createElement('div');document.body.append(host);const r={kind:'Example',apiVersion:'v1',metadata:{name:'example',namespace:'team',creationTimestamp:new Date().toISOString()},spec:{replicas:3,type:'ClusterIP',ports:[{port:80}],template:{spec:{containers:[{image:'api:2'}]}}},status:{readyReplicas:2},release:{chart:'api-1',revision:2,status:'deployed'}};const results=[];for(const kind of Object.keys(window.elD90Columns.profiles)){window.elD90Columns.render(host,[r],kind,{escape,age,health,onOpen:()=>{},enhance:window.elD90Productivity.enhanceTable,onExport:text=>window.columnsTestCSV=text});const before=host.querySelectorAll('th').length;const boxes=[...host.querySelectorAll('.table-columns input')];const index=boxes.findIndex((c,i)=>i>0&&!c.disabled&&c.checked);boxes[index].checked=false;boxes[index].dispatchEvent(new Event('change'));if(!host.querySelectorAll('th')[index].hidden)throw Error(kind+' did not hide');host.querySelector('.table-columns').open=true;results.push({kind,count:before,key:'resource-v3:'+kind,index});}host.remove();return results;})()`);assert.ok(results.length>=25);
 await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.reload());await until(`typeof state!=='undefined'&&state.initialized`);for(const{kind,index}of results){const hidden=await js(`(()=>{const host=document.createElement('div');document.body.append(host);window.elD90Columns.render(host,[{kind:'Example',apiVersion:'v1',metadata:{name:'x',namespace:'team'},spec:{},status:{}}],${JSON.stringify(kind)},{escape,age,health,onOpen:()=>{},enhance:window.elD90Productivity.enhanceTable,onExport:()=>{}});const hidden=host.querySelectorAll('th')[${index}].hidden;host.remove();return hidden;})()`);assert.equal(hidden,true,kind);}
 await js(`(()=>{const host=document.createElement('div');host.id='csv-test';document.body.append(host);window.elD90Columns.render(host,[{metadata:{name:'api',namespace:'team'},spec:{replicas:3,template:{spec:{containers:[{image:'api:2'}]}}},status:{readyReplicas:2}}],'deployments',{escape,age,health,onOpen:()=>{},enhance:window.elD90Productivity.enhanceTable,onExport:text=>window.columnsTestCSV=text});host.querySelector('.text-button').click();})()`);await until(`typeof window.columnsTestCSV==='string'`);const csv=await js('window.columnsTestCSV');assert.ok(csv.includes('Desired')&&csv.includes('api:2'));assert.ok(!csv.split('\n')[0].includes('Namespace'));await js(`document.querySelector('#csv-test').remove()`);

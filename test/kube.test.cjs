@@ -43,3 +43,15 @@ test('RBAC errors and deadlines propagate as actionable errors', async () => {
 });
 
 test('GUI authentication resolves user-local tools before legacy Intel system tools', () => { const folders=kube.environment().PATH.split(path.delimiter); assert.equal(folders[0],path.join(os.homedir(),'.local/bin')); assert.ok(folders.indexOf('/opt/homebrew/bin') < folders.indexOf('/usr/local/bin')); assert.equal(new Set(folders).size,folders.length); });
+
+test('workload logs and Pod attach use explicit context, namespace, and validated targets', () => {
+  const input = { context: 'test', namespace: 'team', name: 'api', container: 'worker' };
+  for (const resource of ['statefulsets', 'daemonsets', 'replicasets', 'replicationcontrollers', 'jobs']) {
+    const args = kube.logArgs({ ...input, resource, follow: true });
+    assert.deepEqual(args.slice(0, 2), ['logs', resource + '/api']);
+    assert.ok(args.includes('--all-pods=true'));
+    assert.ok(args.includes('--follow'));
+  }
+  const args = kube.terminalArgs({ ...input, attach: true, shell: '/bin/bash' });
+  assert.deepEqual(args, ['attach', '-it', 'api', '--context', 'test', '--namespace', 'team', '--request-timeout=0', '--container', 'worker']);
+});

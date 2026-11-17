@@ -51,7 +51,12 @@
     const profile = object.kind==='ConfigMap'?null:columns?.profiles?.[resource] || columns?.profiles?.[inferredResource];
     for (const column of profile || []) {
       if (['name', 'namespace', 'age', 'actions', 'labels', 'status'].includes(column.key) || typeof column.read !== 'function') continue;
-      try { field(column.label, column.read(object)); } catch { /* A malformed optional field must not hide the resource identity. */ }
+      try {
+        const raw = column.read(object);
+        const display = column.format?.(raw) ?? raw;
+        field(column.label, display);
+        if (display !== raw) field(column.label + ' expression', raw);
+      } catch { /* A malformed optional field must not hide the resource identity. */ }
     }
     field('Phase', status.phase); field('Conditions', (status.conditions || []).map(condition=>condition.type+'='+condition.status).join(', '));
     for (const owner of metadata.ownerReferences || []) reference(owner, metadata.namespace);
