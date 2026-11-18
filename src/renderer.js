@@ -61,8 +61,12 @@ async function loadContexts() {
     $('context').innerHTML = '<option value="">Choose a context…</option>' + result.contexts.map(c => `<option value="${escape(c.name)}">${escape(c.name)}</option>`).join('');
     // Connecting is deliberate: never query a real cluster merely on launch.
     if (state.demo) { $('context').value = result.current; await selectContext(result.current); }
-    else { state.context = ''; connection(result.contexts.length ? `${result.contexts.length} contexts available` : 'No contexts found'); if (!result.contexts.length) notice('No kubeconfig contexts found. Add a context with kubectl or set KUBECONFIG, then reload contexts.', true); }
-  } catch (e) { error(e); connection('kubectl unavailable'); }
+    else { state.context = ''; connection(result.contexts.length ? `${result.contexts.length} contexts available` : 'No contexts found'); renderContextPicker(); }
+  } catch (e) {
+    error(e);
+    connection('kubectl unavailable');
+    $('welcome-context-guide').textContent = 'Could not read saved contexts. Check kubectl or import an existing kubeconfig file.';
+  }
 }
 async function stopStreams() {
   ++state.streamGeneration;
@@ -253,6 +257,8 @@ async function navigate(view) {window.elD90TextFind?.close();
   updatePageHeading();
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   $('search').value = '';state.search='';$('status-filter').value='';state.statusFilter='';$('label-filter').value='';state.labelFilter=''; await closeDrawer(); saveWorkspacePreferences(); if (state.context||NO_CONTEXT_VIEWS.includes(view)){const pending=refresh(),generation=state.generation;await pending;return generation;}
+  hidden('welcome', false);
+  hidden('special-view', true);
 }
 function paintResourceSummary(object,kind){
   let core=$('resource-summary-core');if(!core){core=document.createElement('section');core.id='resource-summary-core';$('detail-summary').prepend(core);}
@@ -391,16 +397,61 @@ $('resource-type').onchange = () => { state.dynamicResource = $('resource-type')
 $('use-namespace').onclick = async () => { const value = $('namespace-input').value.trim(); if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(value)) return notice('Enter a valid namespace name.'); if (![...$('namespace').options].some(o => o.value === value)) $('namespace').add(new Option(value, value)); state.namespaceNames=[...new Set([...state.namespaceNames,value])]; await setNamespaceSelection([value]); };
 $('start-forward').onclick = startForward; $('show-forwards').onclick = () => { closeDrawer(); navigate('forwards'); };
 function renderContextPicker(){
+ const count = state.contexts.length;
+ const guide = count
+   ? `Found ${count} saved ${count === 1 ? 'context' : 'contexts'}. Choose one to open its cluster.`
+   : 'No saved contexts found. Import your existing kubeconfig file to choose a cluster.';
+ $('welcome-context-guide').textContent = guide;
+ $('welcome-context').hidden = !count;
+ $('welcome-import').classList.toggle('primary', !count);
+ $('welcome-import').classList.toggle('secondary', !!count);
  const trigger=$('context-trigger');trigger.textContent=(state.context?shortContext(state.context):'Choose a context…')+' ▾';trigger.title=state.context||'Choose a cluster context';
  const query=$('context-search').value.trim().toLowerCase(),rows=state.contexts.filter(c=>[c.name,c.cluster].filter(Boolean).join(' ').toLowerCase().includes(query));
  $('context-options').innerHTML=rows.map(c=>`<button type="button" class="context-option" data-context-choice="${escape(c.name)}" aria-pressed="${c.name===state.context}"><span>${escape(c.name)}</span>${c.name===state.context?'<span aria-hidden="true">✓</span>':''}</button>`).join('');$('context-empty').hidden=rows.length>0;
  $('context-options').querySelectorAll('[data-context-choice]').forEach(button=>button.onclick=()=>{const context=button.dataset.contextChoice;closeContextPicker();$('context').value=context;selectContext(context).catch(error);});
 }
-function closeContextPicker(){hidden('context-popover',true);$('context-trigger').setAttribute('aria-expanded','false');}
-$('context-trigger').onclick=()=>{if(!$('context-popover').classList.contains('hidden'))return closeContextPicker();hidden('namespace-popover',true);$('namespace-multi').setAttribute('aria-expanded','false');$('context-search').value='';renderContextPicker();const rect=$('context-trigger').getBoundingClientRect(),popover=$('context-popover');popover.style.top=Math.min(rect.bottom+6,window.innerHeight-180)+'px';popover.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-410))+'px';$('context-options').style.maxHeight=Math.max(100,window.innerHeight-rect.bottom-130)+'px';hidden('context-popover',false);$('context-trigger').setAttribute('aria-expanded','true');$('context-search').focus();};
+let contextPickerAnchor;
+function closeContextPicker() {
+  hidden('context-popover', true);
+  contextPickerAnchor?.setAttribute('aria-expanded', 'false');
+}
+function toggleContextPicker(anchor) {
+  const wasOpen = !$('context-popover').classList.contains('hidden');
+  closeContextPicker();
+  if (wasOpen && contextPickerAnchor === anchor) return;
+  contextPickerAnchor = anchor;
+  hidden('namespace-popover', true);
+  $('namespace-multi').setAttribute('aria-expanded', 'false');
+  $('context-search').value = '';
+  renderContextPicker();
+  const rect = anchor.getBoundingClientRect(), popover = $('context-popover');
+  popover.style.top = Math.min(rect.bottom + 6, window.innerHeight - 180) + 'px';
+  popover.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 410)) + 'px';
+  $('context-options').style.maxHeight = Math.max(100, window.innerHeight - rect.bottom - 130) + 'px';
+  hidden('context-popover', false);
+  anchor.setAttribute('aria-expanded', 'true');
+  $('context-search').focus();
+}
+for (const id of ['context-trigger', 'welcome-context']) {
+  $(id).onclick = event => toggleContextPicker(event.currentTarget);
+}
+async function openWelcomeConnection(method) {
+  try {
+    const generation = await navigate('connections');
+    if (state.view !== 'connections' || state.generation !== generation) return;
+    const button = $('special-content').querySelector(`[data-method="${method}"]`);
+    button?.click();
+    if (method === 'kube') $('connection-choose')?.focus();
+    else button?.focus();
+  } catch (e) {
+    error(e);
+  }
+}
+$('welcome-import').onclick = () => openWelcomeConnection('kube');
+$('welcome-aws').onclick = () => openWelcomeConnection('aws');
 $('context-search').oninput=renderContextPicker;
-$('context-popover').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeContextPicker();$('context-trigger').focus();}else if(event.key==='ArrowDown'||event.key==='ArrowUp'){const choices=[...$('context-options').querySelectorAll('button')];if(!choices.length)return;event.preventDefault();const index=choices.indexOf(document.activeElement),next=event.key==='ArrowDown'?(index+1)%choices.length:index<0?choices.length-1:(index-1+choices.length)%choices.length;choices[next].focus();}else if(event.key==='Enter'&&event.target===$('context-search')){event.preventDefault();$('context-options').querySelector('button')?.click();}};
-document.addEventListener('click',event=>{if(!$('context-popover').classList.contains('hidden')&&!$('context-popover').contains(event.target)&&!$('context-trigger').contains(event.target))closeContextPicker();});
+$('context-popover').onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeContextPicker();contextPickerAnchor?.focus();}else if(event.key==='ArrowDown'||event.key==='ArrowUp'){const choices=[...$('context-options').querySelectorAll('button')];if(!choices.length)return;event.preventDefault();const index=choices.indexOf(document.activeElement),next=event.key==='ArrowDown'?(index+1)%choices.length:index<0?choices.length-1:(index-1+choices.length)%choices.length;choices[next].focus();}else if(event.key==='Enter'&&event.target===$('context-search')){event.preventDefault();$('context-options').querySelector('button')?.click();}};
+document.addEventListener('click',event=>{if(!$('context-popover').classList.contains('hidden')&&!$('context-popover').contains(event.target)&&!event.target.closest('#context-trigger,#welcome-context'))closeContextPicker();});
 $('context').onchange = () => selectContext($('context').value).catch(error);
 let listPaintFrame=0;
 window.eld90.onListPage(value=>{if(!state.loading||value.context!==state.context||value.requestId!==state.readRequestId||value.resource!==activeResource()||SPECIAL_VIEWS.includes(state.view)||state.view==='overview')return;if(state.listProgressId!==value.requestId){state.listProgressId=value.requestId;state.items=[];}state.listPartial=true;state.items.push(...value.items);if(!listPaintFrame)listPaintFrame=requestAnimationFrame(()=>{listPaintFrame=0;if(value.context===state.context&&value.requestId===state.readRequestId&&state.listPartial)filterTable();});});
@@ -410,7 +461,7 @@ $('navigation').onclick = e => { const b = e.target.closest('[data-view]'); if (
 $('reload-contexts').onclick = async () => {window.elD90History.clearSources();try{const result=state.demo?window.demoWorkspace.contexts:await invoke('kube:contexts');for(const w of clusterWorkspaces.values())w.contexts=result.contexts;state.contexts=result.contexts;$('context').innerHTML='<option value="">Choose a context…</option>'+result.contexts.map(c=>`<option value="${escape(c.name)}">${escape(c.name)}</option>`).join('');$('context').value=state.context;if(state.context){await discoverResources(state.context);await refresh();}renderClusterTabs();}catch(e){error(e);}};
 $('refresh').onclick = refresh; $('search').oninput = ()=>{clearTimeout(searchTimer);const generation=state.generation;searchTimer=setTimeout(()=>{if(state.generation===generation)filterTable();},150);};$('status-filter').onchange=$('label-filter').oninput=()=>{state.statusFilter=$('status-filter').value;state.labelFilter=$('label-filter').value;clearTimeout(searchTimer);searchTimer=setTimeout(filterTable,150);};
 $('view-pods').onclick = $('all-workloads').onclick = () => navigate('pods'); $('view-events').onclick = () => navigate('events');
-$('demo-toggle').onclick = $('welcome-demo').onclick = toggleDemo;
+$('demo-toggle').onclick = toggleDemo;
 $('close-drawer').onclick = closeDrawer;
 document.querySelector('.detail-tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (b && !b.disabled) tab(b.dataset.tab); };
 $('new-yaml').onclick = () => createResource(); $('validate-yaml').onclick = () => editYaml(false); $('apply-yaml').onclick = () => editYaml(true);
@@ -427,7 +478,7 @@ window.eld90?.onStream(message => {
   if(message.id===owner.terminal){owner.terminalBuffer=((owner.terminalBuffer||'')+message.data).slice(-1000000);owner.terminalInstance?.write(message.data);if(message.ended)owner.terminal=null;}
 });
 
-(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); state.demoAvailable=info.demoAvailable===true; $('demo-toggle').hidden=!state.demoAvailable; $('welcome-demo').hidden=!state.demoAvailable; document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version+(info.localBuild?' · LOCAL BUILD':''); if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadExtensions();await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
+(async () => { try { await window.elD90Settings.initialize(invoke); const info = await invoke('app:info'); state.demoAvailable=info.demoAvailable===true; $('demo-toggle').hidden=!state.demoAvailable; document.querySelector('.version').textContent='LOCAL FIRST · v'+info.version+(info.localBuild?' · LOCAL BUILD':''); if (info.demo) { state.forcedDemo = true; state.demo = true; $('mode-badge').textContent = 'DEMO'; $('workspace-mode').textContent = 'Sample workspace'; notice('Demo workspace · sample resources. No connection to your clusters.', true); } await loadExtensions();await loadContexts(); if(!state.demo) await restoreWorkspacePreferences(); } catch (e) { error(e); } })();
 
 function activeResource() { return state.view === 'resources' ? state.dynamicResource : state.view; }
 function renderDiscoveryWarning() {
