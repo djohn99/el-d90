@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.25] - 2026-11-18
+
+- Use the disconnected welcome screen to pick a saved cluster context, import an existing kubeconfig, or open the AWS SSO connection flow.
+- Show whether saved contexts were found and make kubeconfig import the primary action when none are available.
+
 ## [0.5.24] - 2026-11-17
 
 - Open actions from the three-dot menu or by right-clicking a row across Kubernetes resource lists and Helm releases. Menus offer operations appropriate to each resource.
