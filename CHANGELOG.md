@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.28] - 2026-11-19
+
+- Choose an EKS region from a searchable list of region codes and locations, while retaining profile defaults and manual region entry.
+
 ## [0.5.27] - 2026-11-19
 
 - Use only contexts from the kubeconfig files or folders selected with **Use these files**, and open the context picker immediately after loading.
