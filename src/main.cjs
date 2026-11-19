@@ -169,7 +169,13 @@ handle('connections:overview',()=>connections.overview());
 handle('connections:namespaces',input=>connections.namespaces(input));
 handle('connections:test',input=>connections.test(input));
 handle('connections:choose',async(input)=>{const selection=input.paths?{canceled:false,filePaths:settingsStore.resolvePaths(settingsStore.normalize({kubeconfig:{paths:input.paths}}))}:await dialog.showOpenDialog(window,{title:'Link kubeconfig files or folders',properties:[input.folder?'openDirectory':'openFile','multiSelections','showHiddenFiles']});if(selection.canceled)return{cancelled:true};const inspected=await connections.inspectSources(selection.filePaths),token=randomUUID();for(const[id,p]of importPreviews)if(p.expires<Date.now())importPreviews.delete(id);if(importPreviews.size>=10)importPreviews.delete(importPreviews.keys().next().value);importPreviews.set(token,{...inspected,expires:Date.now()+300000});return{token,...inspected};});
-handle('connections:use',async input=>{const preview=importPreviews.get(input.token);if(!preview||preview.expires<Date.now())throw Error('Choose kubeconfig files again; the import preview expired');const checked=await connections.inspectSources(preview.sources||preview.files.map(f=>f.path));if(checked.files.length!==preview.files.length||checked.files.some((f,i)=>f.digest!==preview.files[i].digest))throw Error('A kubeconfig file changed after preview. Choose the files again.');const value=await settingsStore.read(settingsPath());let existing=connections.existingPaths(value);if(!value.kubeconfig.paths.length){const available=await Promise.all(existing.map(async p=>await fs.access(p).then(()=>p,()=>null)));existing=available.filter(Boolean);}value.kubeconfig.paths=[...new Set([...existing,...checked.sources])];const saved=await settingsStore.write(settingsPath(),settingsStore.stringify(value));kube.setKubeconfigPaths(await connections.resolveFiles(settingsStore.resolvePaths(saved)),{explicitSources:true});appliedSettings={...appliedSettings,kubeconfig:saved.kubeconfig};importPreviews.delete(input.token);watchSend('kubeconfig:changed',{});return{restartRequired:false,paths:value.kubeconfig.paths};});
+handle('connections:use',async input=>{const preview=importPreviews.get(input.token);if(!preview||preview.expires<Date.now())throw Error('Choose kubeconfig files again; the import preview expired');const checked=await connections.inspectSources(preview.sources||preview.files.map(f=>f.path));if(checked.files.length!==preview.files.length||checked.files.some((f,i)=>f.digest!==preview.files[i].digest))throw Error('A kubeconfig file changed after preview. Choose the files again.');const value=await settingsStore.read(settingsPath());
+const previousContexts=await kube.contexts().catch(()=>({contexts:[]}));
+if(previousContexts.contexts.length){
+  await fs.writeFile(path.join(app.getPath('userData'),'previous-kubeconfig-sources.json'),
+    JSON.stringify(value.kubeconfig),{mode:0o600});
+}
+value.kubeconfig.paths=[...new Set(checked.sources)];const saved=await settingsStore.write(settingsPath(),settingsStore.stringify(value));kube.setKubeconfigPaths(await connections.resolveFiles(settingsStore.resolvePaths(saved)),{explicitSources:true});appliedSettings={...appliedSettings,kubeconfig:saved.kubeconfig};importPreviews.delete(input.token);watchSend('kubeconfig:changed',{});return{restartRequired:false,paths:value.kubeconfig.paths};});
 handle('topology:snapshot',topology.snapshot);
 handle('topology:api',topology.apiInspection);
 handle('editor:parse',editor.parseDocuments);
@@ -183,7 +189,22 @@ handle('node:ssh-start',async(input,event)=>{const request=nodes.validateSSH(inp
 handle('node:debug-start',async(input,event)=>{const request=nodes.validateDebug(input);const choice=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Create privileged debug Pod'],defaultId:0,cancelId:0,message:request.confirmation.title,detail:request.confirmation.detail});if(choice.response!==1)return{cancelled:true};await workspacePolicy.assertAllowed('node:debug-start',input);const pendingId=randomUUID();nodePending.set(pendingId,{...request,startedAt:new Date().toISOString()});let record;try{record=await nodes.createDebug(input,{onCreated:()=>saveDebugJournal()});await saveDebugJournal();for(const[id,s]of streams)if(s.type==='terminal'&&s.context===input.context)await stop(id);const id=startStream(nodes.terminalArgs(record),'terminal',event,input.context,{cleanup:()=>cleanDebug(record),metadata:{transport:'debug',nodeName:record.nodeName,podName:record.podName,namespace:record.namespace}});return{id,transport:'debug',nodeName:record.nodeName,podName:record.podName,namespace:record.namespace};}catch(e){if(record)await cleanDebug(record);await saveDebugJournal().catch(()=>{});throw e;}finally{nodePending.delete(pendingId);}});
 handle('node:debug-cleanup',async input=>{const record=nodes.active().find(v=>v.sessionToken===input.sessionToken&&v.context===input.context);if(!record)throw new Error('Owned debug session not found');const result=await dialog.showMessageBox(window,{type:'warning',buttons:['Cancel','Clean up owned debug Pod'],defaultId:0,cancelId:0,message:`Remove ${record.podName}?`,detail:`Context: ${record.context}\nNamespace: ${record.namespace}\nOnly the recorded Pod UID and ownership labels can be removed.`});if(result.response!==1)return{cancelled:true};for(const[id,s]of streams)if(s.context===record.context&&s.metadata?.podName===record.podName)await stop(id);return nodes.active().some(v=>v.sessionToken===record.sessionToken)?cleanDebug(record):{removed:true};});
 handle('app:info', () => ({ demo, demoAvailable: !app.isPackaged, localBuild: !app.isPackaged, version: app.getVersion(), platform: process.platform }));
-handle('kube:contexts', kube.contexts);
+handle('kube:contexts', async input => {
+  const result = await kube.contexts();
+  if (!input.restoreIfEmpty || result.contexts.length) return result;
+  const previousFile = path.join(app.getPath('userData'), 'previous-kubeconfig-sources.json');
+  let previous;
+  try { previous = JSON.parse(await fs.readFile(previousFile, 'utf8')); }
+  catch (e) { if(e.code!=='ENOENT') throw e; previous={paths:[]}; }
+  const value = await settingsStore.read(settingsPath());
+  value.kubeconfig = settingsStore.normalize({kubeconfig:previous}).kubeconfig;
+  const paths = await connections.resolveFiles(connections.existingPaths(value));
+  kube.setKubeconfigPaths(paths,{explicitSources:value.kubeconfig.paths.length>0});
+  const restored = await kube.contexts();
+  await settingsStore.write(settingsPath(), settingsStore.stringify(value));
+  appliedSettings={...appliedSettings,kubeconfig:value.kubeconfig};
+  return {...restored, restoredPrevious:true};
+});
 handle('kube:health', async input => { await kube.run(['get', '--context', kube.string(input.context,'context'), '--request-timeout=5s', '--raw', '/readyz'], {timeout:8000}); return {ready:true}; });
 handle('history:sources', history.sources);
 handle('history:query', history.query);
