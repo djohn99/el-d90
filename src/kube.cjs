@@ -65,10 +65,10 @@ function scope(input, kind, requireNamespace = false) {
   }
   return args;
 }
-let configuredKubeconfigPaths=[];
-function setKubeconfigPaths(paths,{preserveCatalogues=false}={}){const previous=configuredKubeconfigPaths.length?configuredKubeconfigPaths:(environment().KUBECONFIG||path.join(os.homedir(),'.kube/config')).split(path.delimiter).filter(Boolean);const appended=paths.length>=previous.length&&previous.every((p,i)=>p===paths[i]);configuredKubeconfigPaths=[...paths];api.close();if(!preserveCatalogues||!appended)catalogues.clear();pendingLists.clear();}
+let configuredKubeconfigPaths=[], explicitKubeconfigSources=false;
+function setKubeconfigPaths(paths,{preserveCatalogues=false,explicitSources=false}={}){const previous=configuredKubeconfigPaths.length?configuredKubeconfigPaths:(environment().KUBECONFIG||path.join(os.homedir(),'.kube/config')).split(path.delimiter).filter(Boolean);const appended=paths.length>=previous.length&&previous.every((p,i)=>p===paths[i]);configuredKubeconfigPaths=[...paths];explicitKubeconfigSources=paths.length>0||explicitSources;api.close();if(!preserveCatalogues||!appended)catalogues.clear();pendingLists.clear();}
 function environment() {
-  return { ...require('./runtime-environment.cjs').environment(), ...(configuredKubeconfigPaths.length?{KUBECONFIG:configuredKubeconfigPaths.join(path.delimiter)}:{}), PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(require('./runtime-environment.cjs').environment().PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(path.delimiter) };
+  return { ...require('./runtime-environment.cjs').environment(), ...(explicitKubeconfigSources?{KUBECONFIG:configuredKubeconfigPaths.length?configuredKubeconfigPaths.join(path.delimiter):path.join(os.tmpdir(),'el-d90-empty-kubeconfig')}:{}), PATH: [...new Set([path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', ...(require('./runtime-environment.cjs').environment().PATH || '').split(path.delimiter), '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(path.delimiter) };
 }
 function executable() {
   const candidates = [process.env.EL_D90_KUBECTL || process.env.HARBOR_KUBECTL, ...environment().PATH.split(path.delimiter).map(p => path.join(p, process.platform==='win32'?'kubectl.exe':'kubectl'))].filter(Boolean);

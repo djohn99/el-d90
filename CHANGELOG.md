@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.26] - 2026-11-19
+
+- Link a kubeconfig file or folder by entering its path or using the file and folder pickers. Linked sources load immediately.
+- Automatically refresh saved contexts when linked files change or kubeconfigs are added to or removed from a linked folder. Folders scan files directly inside them.
+
 ## [0.5.25] - 2026-11-18
 
 - Use the disconnected welcome screen to pick a saved cluster context, import an existing kubeconfig, or open the AWS SSO connection flow.

@@ -459,6 +459,18 @@ window.eld90.onNavigate(view=>{if(Object.hasOwn(titles,view))navigate(view).catc
 $('namespace').onchange = () => setNamespaceSelection($('namespace').value === '*' ? [] : [$('namespace').value]);
 $('navigation').onclick = e => { const b = e.target.closest('[data-view]'); if (b) navigate(b.dataset.view); };
 $('reload-contexts').onclick = async () => {window.elD90History.clearSources();try{const result=state.demo?window.demoWorkspace.contexts:await invoke('kube:contexts');for(const w of clusterWorkspaces.values())w.contexts=result.contexts;state.contexts=result.contexts;$('context').innerHTML='<option value="">Choose a context…</option>'+result.contexts.map(c=>`<option value="${escape(c.name)}">${escape(c.name)}</option>`).join('');$('context').value=state.context;if(state.context){await discoverResources(state.context);await refresh();}renderClusterTabs();}catch(e){error(e);}};
+window.eld90.onKubeconfigChanged(async () => {
+  try {
+    const result = await invoke('kube:contexts');
+    if (state.demo) return;
+    for (const owner of clusterWorkspaces.values()) if (!owner.demo) owner.contexts = result.contexts;
+    state.contexts = result.contexts;
+    $('context').innerHTML = '<option value="">Choose a context…</option>' +
+      result.contexts.map(context => `<option value="${escape(context.name)}">${escape(context.name)}</option>`).join('');
+    $('context').value = state.context;
+    renderClusterTabs();
+  } catch (e) { error(e); }
+});
 $('refresh').onclick = refresh; $('search').oninput = ()=>{clearTimeout(searchTimer);const generation=state.generation;searchTimer=setTimeout(()=>{if(state.generation===generation)filterTable();},150);};$('status-filter').onchange=$('label-filter').oninput=()=>{state.statusFilter=$('status-filter').value;state.labelFilter=$('label-filter').value;clearTimeout(searchTimer);searchTimer=setTimeout(filterTable,150);};
 $('view-pods').onclick = $('all-workloads').onclick = () => navigate('pods'); $('view-events').onclick = () => navigate('events');
 $('demo-toggle').onclick = toggleDemo;
