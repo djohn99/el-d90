@@ -26,6 +26,37 @@ window.elD90AWSConnections = { async render(host, opts) {
   }
   q('#aws-profile').onchange = () => { activeRole='';verifiedProfile=null;progress(); try{if(!opts.demo)localStorage.setItem('el-d90-aws-profile',q('#aws-profile').value);}catch{} invalidate(); job = null; q('#aws-login-cancel').hidden = true; q('#aws-region').value = selected()?.region || q('#aws-region').value; provider(); if(selected()&&q('#aws-region').value.trim())loadClusters(); };
   q('#aws-region').oninput = () => { invalidate(); provider(); status('Load EKS clusters for the new region.'); };
+  // Region suggestions follow https://docs.aws.amazon.com/general/latest/gr/eks.html.
+  // Keep manual entry for other partitions and newly available regions.
+  const eksRegions = [
+    ['us-east-1','N. Virginia'],['us-east-2','Ohio'],['us-west-1','N. California'],['us-west-2','Oregon'],
+    ['af-south-1','Cape Town'],['ap-east-1','Hong Kong'],['ap-east-2','Taipei'],
+    ['ap-south-1','Mumbai'],['ap-south-2','Hyderabad'],['ap-northeast-1','Tokyo'],['ap-northeast-2','Seoul'],['ap-northeast-3','Osaka'],
+    ['ap-southeast-1','Singapore'],['ap-southeast-2','Sydney'],['ap-southeast-3','Jakarta'],['ap-southeast-4','Melbourne'],
+    ['ap-southeast-5','Malaysia'],['ap-southeast-6','New Zealand'],['ap-southeast-7','Thailand'],
+    ['ca-central-1','Canada Central'],['ca-west-1','Calgary'],['eu-central-1','Frankfurt'],['eu-central-2','Zurich'],
+    ['eu-west-1','Ireland'],['eu-west-2','London'],['eu-west-3','Paris'],['eu-north-1','Stockholm'],['eu-south-1','Milan'],['eu-south-2','Spain'],
+    ['il-central-1','Tel Aviv'],['mx-central-1','Mexico Central'],['me-south-1','Bahrain'],['me-central-1','UAE'],
+    ['sa-east-1','São Paulo'],['us-gov-east-1','GovCloud US East'],['us-gov-west-1','GovCloud US West']
+  ];
+  const regionField=q('#aws-region'),regionLabel=regionField.closest('label');
+  const regionButton=document.createElement('button');
+  regionButton.id='aws-region-picker';regionButton.type='button';regionButton.className='button secondary';
+  regionButton.textContent='Choose region…';regionButton.setAttribute('aria-controls','aws-region-menu');regionButton.setAttribute('aria-expanded','false');
+  regionLabel.after(regionButton);
+  const regionMenu=document.createElement('div');regionMenu.id='aws-region-menu';regionMenu.className='connection-popover';regionMenu.setAttribute('popover','auto');
+  regionMenu.innerHTML='<input type="search" id="aws-region-search" aria-label="Search EKS regions" placeholder="Search region or location"><div id="aws-region-options" class="sso-choice-list" role="group" aria-label="EKS regions"></div>';
+  host.append(regionMenu);
+  const regionSearch=q('#aws-region-search'),regionOptions=q('#aws-region-options'),regionPopover=floatingChoices(regionButton,regionMenu,regionSearch);
+  function paintRegions(){
+    const query=regionSearch.value.trim().toLowerCase();
+    const choices=new Map(eksRegions);
+    for(const profile of profiles)if(profile.region&&!choices.has(profile.region))choices.set(profile.region,'Saved profile');
+    regionOptions.innerHTML=[...choices].filter(([code,name])=>(code+' '+name).toLowerCase().includes(query)).map(([code,name])=>'<button type="button" class="sso-choice" data-region="'+esc(code)+'" aria-pressed="'+(code===regionField.value.trim())+'"><span><strong>'+esc(code)+'</strong><small>'+esc(name)+'</small></span></button>').join('')||'<p>No matching regions. You can enter a region directly.</p>';
+  }
+  regionButton.onclick=()=>{if(regionMenu.matches(':popover-open'))return regionPopover.close();regionSearch.value='';paintRegions();regionPopover.open();regionSearch.focus();};
+  regionSearch.oninput=paintRegions;
+  regionOptions.onclick=event=>{const choice=event.target.closest('[data-region]');if(!choice)return;regionField.value=choice.dataset.region;regionPopover.close(true);regionField.dispatchEvent(new Event('input',{bubbles:true}));};
   let namespaceNames=[];
   const namespaceField=q('#aws-namespace'), namespaceMenu=q('#aws-namespace-options');
   namespaceField.setAttribute('aria-controls',namespaceMenu.id);
@@ -170,7 +201,7 @@ window.elD90AWSConnections = { async render(host, opts) {
         close(true);
       }
       if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-      const buttons = [...panel.querySelectorAll('[data-choice], [data-namespace]')];
+      const buttons = [...panel.querySelectorAll('[data-choice], [data-namespace], [data-region]')];
       if (!buttons.length) return;
       event.preventDefault();
       open();
