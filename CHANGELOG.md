@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.27] - 2026-11-19
+
+- Use only contexts from the kubeconfig files or folders selected with **Use these files**, and open the context picker immediately after loading.
+- Restore the previous kubeconfig sources with Refresh when the selected source has no contexts, including an accidentally selected empty folder.
+
 ## [0.5.26] - 2026-11-19
 
 - Link a kubeconfig file or folder by entering its path or using the file and folder pickers. Linked sources load immediately.
