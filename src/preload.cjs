@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('eld90', {
   onFind(callback){const listener=()=>callback();ipcRenderer.on('app:open-find',listener);return()=>ipcRenderer.removeListener('app:open-find',listener);},
   onFindResult(callback){const listener=(_event,result)=>callback(result);ipcRenderer.on('app:find-result',listener);return()=>ipcRenderer.removeListener('app:find-result',listener);},
   onNavigate(callback){const listener=(_event,view)=>callback(view);ipcRenderer.on('app:navigate',listener);return()=>ipcRenderer.removeListener('app:navigate',listener);},
+  onKubeconfigChanged(callback){const listener=()=>callback();ipcRenderer.on('kubeconfig:changed',listener);return()=>ipcRenderer.removeListener('kubeconfig:changed',listener);},
   onSession(callback){const listener=(_e,value)=>callback(value);ipcRenderer.on('session:data',listener);return()=>ipcRenderer.removeListener('session:data',listener);},
   onWatch(callback){const listener=(_e,value)=>callback(value);ipcRenderer.on('watch:event',listener);return()=>ipcRenderer.removeListener('watch:event',listener);},
   onWatchStatus(callback){const listener=(_e,value)=>callback(value);ipcRenderer.on('watch:status',listener);return()=>ipcRenderer.removeListener('watch:status',listener);},

@@ -14,3 +14,23 @@ test('namespace choices check access and do not assume default or expose denied 
 test('namespace discovery filters namespace-list results by actual role access',async()=>{
  const result=await require('../src/connections.cjs').namespaces({context:'team'},{overview:async()=>({contexts:[{name:'team'}]}),list:async()=>({items:[{metadata:{name:'staging'}},{metadata:{name:'production'}}]}),test:async input=>({canListPods:input.namespace==='staging'})});assert.deepEqual(result.namespaces,['staging']);
 });
+
+test('linked folders discover new kubeconfigs and ignore unrelated files', async () => {
+  const fs = require('node:fs/promises'), os = require('node:os'), path = require('node:path');
+  const {resolveFiles, inspectSources} = require('../src/connections.cjs');
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'eld90-folder-sync-'));
+  const config = 'apiVersion: v1\nkind: Config\nclusters: []\ncontexts: []\nusers: []\n';
+  try {
+    assert.deepEqual(await resolveFiles([folder]), []);
+    await fs.writeFile(path.join(folder, 'notes.txt'), 'ordinary text');
+    await fs.writeFile(path.join(folder, 'first.yaml'), config);
+    assert.deepEqual(await resolveFiles([folder]), [path.join(folder, 'first.yaml')]);
+    assert.deepEqual((await inspectSources([folder])).sources, [folder]);
+    await fs.writeFile(path.join(folder, 'second'), config);
+    assert.equal((await resolveFiles([folder])).length, 2);
+    await fs.unlink(path.join(folder, 'first.yaml'));
+    assert.deepEqual(await resolveFiles([folder]), [path.join(folder, 'second')]);
+  } finally {
+    await fs.rm(folder, {recursive: true, force: true});
+  }
+});
