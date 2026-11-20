@@ -19,6 +19,12 @@ const hidden = (id, hide) => $(id).classList.toggle('hidden', hide);
 function dismissFloatingMenus(event) {
   for (const panel of document.querySelectorAll(':popover-open, #context-popover:not(.hidden), #namespace-popover:not(.hidden)')) {
     if (panel.dataset.tracksAnchor || (event.target instanceof Node && panel.contains(event.target))) continue;
+    const anchor = panel.id === 'context-popover' ? contextPickerAnchor : panel.id === 'namespace-popover' ? $('namespace-multi') : document.querySelector('[popovertarget="' + CSS.escape(panel.id) + '"]');
+    if (event.type === 'scroll' && event.target instanceof Element && anchor && !event.target.contains(anchor)) continue;
+    if (event.type === 'scroll' && anchor && panel.dataset.anchorTop !== undefined) {
+      const rect = anchor.getBoundingClientRect();
+      if (Math.abs(rect.top - Number(panel.dataset.anchorTop)) < 1 && Math.abs(rect.left - Number(panel.dataset.anchorLeft)) < 1) continue;
+    }
     if (panel.matches(':popover-open')) panel.hidePopover();
     else {
       if (panel.id === 'context-popover') closeContextPicker();
@@ -442,6 +448,7 @@ function toggleContextPicker(anchor) {
   $('context-search').value = '';
   renderContextPicker();
   const rect = anchor.getBoundingClientRect(), popover = $('context-popover');
+  popover.dataset.anchorTop = rect.top; popover.dataset.anchorLeft = rect.left;
   popover.style.top = Math.min(rect.bottom + 6, window.innerHeight - 180) + 'px';
   popover.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 410)) + 'px';
   $('context-options').style.maxHeight = Math.max(100, window.innerHeight - rect.bottom - 130) + 'px';
@@ -752,7 +759,7 @@ function openNamespacePicker() {
   const selected=new Set(state.namespaces);$('namespace-options').innerHTML=state.namespaceNames.map(ns=>`<label><input type="checkbox" value="${escape(ns)}" ${selected.has(ns)?'checked':''}>${escape(ns)}</label>`).join('');
   $('namespace-wildcard').checked=state.namespaces.length===0;
   $('namespace-options').querySelectorAll('input').forEach(input=>input.onchange=()=>{$('namespace-wildcard').checked=![...$('namespace-options').querySelectorAll('input:checked')].length;setNamespaceSelection([...$('namespace-options').querySelectorAll('input:checked')].map(i=>i.value),true).catch(error);});
-  const rect=$('namespace-multi').getBoundingClientRect();$('namespace-popover').style.top=`${rect.bottom+7}px`;$('namespace-popover').style.left=`${Math.max(8,Math.min(rect.right-325,window.innerWidth-335))}px`;$('namespace-options').style.maxHeight=`${Math.max(100,window.innerHeight-rect.bottom-200)}px`;
+  const rect=$('namespace-multi').getBoundingClientRect();$('namespace-popover').dataset.anchorTop=rect.top;$('namespace-popover').dataset.anchorLeft=rect.left;$('namespace-popover').style.top=`${rect.bottom+7}px`;$('namespace-popover').style.left=`${Math.max(8,Math.min(rect.right-325,window.innerWidth-335))}px`;$('namespace-options').style.maxHeight=`${Math.max(100,window.innerHeight-rect.bottom-200)}px`;
   hidden('namespace-popover',!opening);$('namespace-multi').setAttribute('aria-expanded',String(opening));if(opening)$('namespace-search').focus();
 }
 $('namespace-multi').onclick=openNamespacePicker;

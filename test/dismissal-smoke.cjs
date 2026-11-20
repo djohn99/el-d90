@@ -13,6 +13,8 @@ const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpd
  await page.locator('#namespace-options').evaluate(el=>el.dispatchEvent(new Event('scroll')));
  assert.equal(await page.locator('#namespace-popover').isVisible(),true);
  await page.locator('main').evaluate(el=>el.dispatchEvent(new Event('scroll')));
+ assert.equal(await page.locator('#namespace-popover').isVisible(),true);
+ await page.locator('#namespace-multi').evaluate(el=>{el.style.transform='translateY(10px)';el.parentElement.dispatchEvent(new Event('scroll'));el.style.transform='';});
  await page.locator('#namespace-popover').waitFor({state:'hidden'});
  assert.equal(await page.locator('#namespace-multi').getAttribute('aria-expanded'),'false');
  const picker=page.locator('#resource-table .node-column-picker');await picker.locator('summary').click();await picker.getByLabel('Show CPU column',{exact:true}).uncheck();assert.equal(await picker.getAttribute('open'),'');await page.locator('#page-title').click();assert.equal(await picker.getAttribute('open'),null);
