@@ -37,3 +37,7 @@ test('compressed Kubernetes reads share a connection and enforce the decoded byt
   assert.deepEqual(await api.get('admin','/api/v1/pods'),{items:[]});
   assert.deepEqual(encodings,['gzip','gzip','gzip',undefined]);
 }));
+test('missing kubeconfig CA is identified as TLS setup rather than a sign-in failure',async()=>fixture(async({api,file})=>{
+ const config=YAML.parse(await fs.readFile(file,'utf8'));config.clusters[0].cluster['certificate-authority']='PRIVATE_MISSING_CA';await fs.writeFile(file,YAML.stringify(config));
+ await assert.rejects(api.get('admin','/api/v1/pods'),error=>{assert.match(error.message,/\[kubeconfig-tls\]/);assert.ok(!error.message.includes('PRIVATE'));return true;});
+}));

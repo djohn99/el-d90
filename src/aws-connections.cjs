@@ -90,6 +90,13 @@ class AWSConnections {
       try{const result=JSON.parse(await this.run(args,{timeout:10000}));checks.push({name:label,ok:true,message:label==='Identity'?'Selected profile authenticated.':String(result.clusters?.length||0)+' EKS clusters returned.'});}
       catch(error){checks.push({name:label,ok:false,message:safeError(error),...(Number.isInteger(error.exitCode)?{exitCode:error.exitCode}:{})});}
     }
+    if(input.cluster){
+      const name=text(input.cluster,'EKS cluster',100);if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(name))throw Error('Invalid EKS cluster');
+      const provider=new (require('./kube-exec-auth.cjs').ContextExecAuth)({apiVersion:'client.authentication.k8s.io/v1beta1',command:executable,args:['--region',selectedRegion,'eks','get-token','--cluster-name',name,'--output','json','--profile',profile.name],env:[{name:'AWS_PROFILE',value:profile.name}]},{},env);
+      try{await provider.credential();checks.push({name:'EKS token generation',ok:true,message:'The selected profile generated a valid Kubernetes credential. No token is displayed.'});}
+      catch(error){checks.push({name:'EKS token generation',ok:false,message:error.credentialCode?error.message:'Credential plugin setup failed. Check the AWS executable and kubeconfig exec configuration.'});}
+      finally{provider.close();}
+    }
     return {executable,version,profile:profile.name,region:selectedRegion,environment:{proxyConfigured:!!(env.HTTPS_PROXY||env.https_proxy||env.HTTP_PROXY||env.http_proxy),caBundleConfigured:!!(env.AWS_CA_BUNDLE),configOverride:!!env.AWS_CONFIG_FILE,credentialsOverride:!!env.AWS_SHARED_CREDENTIALS_FILE,endpointOverride:!!(env.AWS_ENDPOINT_URL||env.AWS_ENDPOINT_URL_EKS)},checks};
   }
   async clusters(input) {
