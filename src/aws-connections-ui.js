@@ -2,7 +2,7 @@ window.elD90AWSConnections = { async render(host, opts) {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const current = () => host.isConnected && (!opts.isCurrent || opts.isCurrent()); let preferredProfile=/^el-d90:([^:]+):/.exec(opts.context||'')?.[1]||'';try{preferredProfile ||= opts.demo?'':localStorage.getItem('el-d90-aws-profile')||'';}catch{}
   let profiles = [], epoch = 0, job = null, timer, imported = null, connectPending=false, namespaceJob=null, namespaceEpoch=0;
-  host.innerHTML = '<h2>AWS SSO → EKS</h2><details id="aws-saved-profiles"><summary>Use a saved AWS profile</summary><div class="aws-connect-fields"><label>AWS profile<select id="aws-profile" aria-label="AWS profile"></select></label><button id="aws-profiles-reload" class="button secondary">Reload profiles</button></div><p id="aws-profile-info"></p><div class="aws-connect-actions"><button id="aws-login" class="button primary" disabled>Sign in with AWS SSO</button><button id="aws-login-cancel" class="button secondary" hidden>Cancel sign-in</button></div></details><section class="aws-cluster-stage"><h3>Select cluster</h3><div class="aws-connect-actions aws-region-row"><label>EKS region<input id="aws-region" aria-label="EKS region" placeholder="eu-west-1"></label><button id="aws-clusters-load" class="button secondary" disabled>Load EKS clusters</button></div><div class="aws-connect-fields aws-cluster-row"><label>EKS cluster<select id="aws-cluster" aria-label="EKS cluster" disabled><option value="">Load clusters first…</option></select></label><label>Cluster name (if not listed)<input id="aws-cluster-name" aria-label="Manual EKS cluster name" placeholder="Optional"></label><div class="sso-picker"><label>Namespace<span class="aws-search-field"><span class="aws-search-icon" aria-hidden="true"></span><input id="aws-namespace" aria-label="EKS namespace" aria-describedby="aws-namespace-status" placeholder="Search namespaces or enter a known namespace"></span></label><div id="aws-namespace-options" class="sso-choice-list connection-popover" popover="auto" role="group" aria-label="Accessible namespaces"></div></div><button id="aws-connect" class="button primary" disabled>Connect to cluster</button><button id="aws-open" class="button secondary" hidden disabled>Open this cluster</button></div><small id="aws-namespace-status">Choose a cluster to load namespaces.</small><pre id="aws-status" role="status"></pre></section><details><summary>AWS diagnostics</summary><button id="aws-diagnostics" class="button secondary" disabled>Check AWS connection</button></details><details id="aws-sso-setup"><summary>Set up a new SSO profile</summary><p>One-time setup using your organization’s AWS access portal information. This adds a named AWS CLI profile and keeps existing profiles unchanged. No password or access token is entered here.</p><div class="aws-connect-fields"><label>Profile name<input id="aws-new-profile" aria-label="New AWS profile name" placeholder="my-company-sso"></label><label>SSO start / issuer URL<input id="aws-start-url" aria-label="SSO start URL" placeholder="https://your-company.awsapps.com/start"></label><label>SSO region<input id="aws-sso-region" aria-label="SSO region" placeholder="eu-west-1"></label><label>AWS account ID<input id="aws-account" aria-label="AWS account ID" inputmode="numeric" placeholder="12 digits"></label><label>SSO role / permission-set name<input id="aws-role" aria-label="SSO role name" placeholder="Your assigned role"></label></div><button id="aws-profile-create" class="button secondary">Save named SSO profile</button><p>The EKS region above is saved as the profile’s default region. Ask your AWS administrator for portal/account/role information if needed.</p></details>';
+  host.innerHTML = '<h2>AWS SSO → EKS</h2><details id="aws-saved-profiles"><summary>Use a saved AWS profile</summary><div class="aws-connect-fields"><label>AWS profile<select id="aws-profile" aria-label="AWS profile"></select></label><button id="aws-profiles-reload" class="button secondary">Reload profiles</button></div><p id="aws-profile-info"></p><div class="aws-connect-actions"><button id="aws-login" class="button primary" disabled>Sign in with AWS SSO</button><button id="aws-login-cancel" class="button secondary" hidden>Cancel sign-in</button></div></details><section class="aws-cluster-stage"><h3>Select cluster</h3><div class="aws-connect-actions aws-region-row"><label>EKS region<input id="aws-region" aria-label="EKS region" placeholder="eu-west-1"></label><button id="aws-clusters-load" class="button secondary" disabled>Load EKS clusters</button></div><div class="aws-connect-fields aws-cluster-row"><label>EKS cluster<select id="aws-cluster" aria-label="EKS cluster" disabled><option value="">Load clusters first…</option></select></label><label>Cluster name (if not listed)<input id="aws-cluster-name" aria-label="Manual EKS cluster name" placeholder="Optional"></label><div class="sso-picker"><label>Namespace<span class="aws-search-field"><span class="aws-search-icon" aria-hidden="true"></span><input id="aws-namespace" aria-label="EKS namespace" aria-describedby="aws-namespace-status" placeholder="Search namespaces or enter a known namespace"></span></label><div id="aws-namespace-options" class="sso-choice-list connection-popover" popover="auto" role="group" aria-label="Accessible namespaces"></div></div><button id="aws-connect" class="button primary" disabled>Connect to cluster</button><button id="aws-open" class="button secondary" hidden disabled>Open this cluster</button><small id="aws-namespace-status">Choose a cluster to load namespaces.</small></div><pre id="aws-status" role="status"></pre></section><details><summary>AWS diagnostics</summary><button id="aws-diagnostics" class="button secondary" disabled>Check AWS connection</button></details><details id="aws-sso-setup"><summary>Set up a new SSO profile</summary><p>One-time setup using your organization’s AWS access portal information. This adds a named AWS CLI profile and keeps existing profiles unchanged. No password or access token is entered here.</p><div class="aws-connect-fields"><label>Profile name<input id="aws-new-profile" aria-label="New AWS profile name" placeholder="my-company-sso"></label><label>SSO start / issuer URL<input id="aws-start-url" aria-label="SSO start URL" placeholder="https://your-company.awsapps.com/start"></label><label>SSO region<input id="aws-sso-region" aria-label="SSO region" placeholder="eu-west-1"></label><label>AWS account ID<input id="aws-account" aria-label="AWS account ID" inputmode="numeric" placeholder="12 digits"></label><label>SSO role / permission-set name<input id="aws-role" aria-label="SSO role name" placeholder="Your assigned role"></label></div><button id="aws-profile-create" class="button secondary">Save named SSO profile</button><p>The EKS region above is saved as the profile’s default region. Ask your AWS administrator for portal/account/role information if needed.</p></details>';
   const q = selector => host.querySelector(selector), status = message => { if (current()) q('#aws-status').textContent = message; };
   const demo = { available: true, profiles: [{ name: 'demo-company-sso', region: 'eu-west-1', sso: true, account: '000000000000', role: 'DemoAccess' }], message: 'Demo only. No AWS login or configuration changes occur.' };
   function invalidate() { namespaceNames=[];clearTimeout(manualClusterTimer);++epoch; clearTimeout(timer); imported = null; q('#aws-open').disabled = true; q('#aws-connect').disabled = true; q('#aws-cluster').disabled = true; q('#aws-cluster').innerHTML = '<option value="">Load clusters first…</option>';q('#aws-cluster-name').value='';q('#aws-namespace').value='';namespacePopover.close();q('#aws-namespace-options').replaceChildren();q('#aws-namespace-status').textContent='Choose a cluster to load namespaces.';namespaceEpoch++;namespaceJob=null;q('#aws-connect').textContent='Connect to cluster'; }
@@ -65,7 +65,7 @@ window.elD90AWSConnections = { async render(host, opts) {
   const namespacePopover=floatingChoices(namespaceField,namespaceMenu);
   namespaceField.onclick=()=>{if(namespaceNames.length){paintNamespaces();namespacePopover.open();}};
 
-  function paintNamespaces(){const value=q('#aws-namespace').value.trim(),query=value.toLowerCase(),matches=namespaceNames.filter(name=>name.toLowerCase().includes(query));q('#aws-namespace-options').innerHTML=matches.length?matches.map(name=>'<button type="button" class="sso-choice" data-namespace="'+esc(name)+'" aria-pressed="'+(name===value)+'">'+esc(name)+'</button>').join(''):'<p>'+esc(namespaceNames.length?'No matching namespaces. Clear the search to see all choices.':'No accessible namespaces discovered. Enter a known namespace to check access.')+'</p>';q('#aws-namespace-options').querySelectorAll('[data-namespace]').forEach(button=>button.onclick=()=>{q('#aws-namespace').value=button.dataset.namespace;namespacePopover.close(true);paintNamespaces();});}
+  function paintNamespaces(){const raw=q('#aws-namespace').value,value=raw.trim(),query=(/[\s,]$/.test(raw)?'':value.split(/[\s,]+/).at(-1)).toLowerCase(),matches=namespaceNames.filter(name=>name.toLowerCase().includes(query));q('#aws-namespace-options').innerHTML=matches.length?matches.map(name=>'<button type="button" class="sso-choice" data-namespace="'+esc(name)+'" aria-pressed="'+(name===value)+'">'+esc(name)+'</button>').join(''):'<p>'+esc(namespaceNames.length?'No matching namespaces. Clear the search to see all choices.':'No accessible namespaces discovered. Enter a known namespace to check access.')+'</p>';q('#aws-namespace-options').querySelectorAll('[data-namespace]').forEach(button=>button.onclick=()=>{const parts=q('#aws-namespace').value.split(/[\s,]+/);parts.pop();q('#aws-namespace').value=[...new Set([...parts.filter(Boolean),button.dataset.namespace])].join(', ');namespacePopover.close(true);paintNamespaces();});}
   async function prepareNamespaces(){
     const ticket=++namespaceEpoch,own=epoch,input={profile:q('#aws-profile').value,region:q('#aws-region').value.trim(),cluster:q('#aws-cluster-name').value.trim()||q('#aws-cluster').value};
     imported=null;namespaceNames=[];q('#aws-namespace').value='';q('#aws-connect').disabled=true;namespacePopover.close();q('#aws-namespace-options').replaceChildren();q('#aws-namespace-status').textContent='Loading namespaces and checking access…';
@@ -73,7 +73,7 @@ window.elD90AWSConnections = { async render(host, opts) {
     const valid=()=>current()&&own===epoch&&ticket===namespaceEpoch;
     const work=(async()=>{try{status('Loading accessible namespaces…');const result=opts.demo?{context:'demo-eu-west'}:await opts.invoke('aws:connect',input);if(!valid())return;
       const data=opts.demo?{namespaces:['demo'],message:'Choose a namespace.'}:await opts.invoke('connections:namespaces',{context:result.context,candidates:opts.namespaces||[]});if(!valid())return;
-      imported=result;namespaceNames=data.namespaces;paintNamespaces();q('#aws-namespace-status').textContent=namespaceNames.length?'Choose or enter a namespace.':'Enter a known namespace to check access.';status(data.message);q('#aws-connect').disabled=false;
+      imported=result;namespaceNames=data.namespaces;paintNamespaces();q('#aws-namespace-status').textContent=namespaceNames.length?'Choose or enter namespaces, separated by commas or spaces.':'Enter a known namespace to check access.';status(data.message);q('#aws-connect').disabled=false;
     }catch(error){if(valid()){status(error.message);q('#aws-namespace-status').textContent='Namespace discovery failed. Check sign-in or retry Connect.';q('#aws-connect').disabled=false;}}
     })();namespaceJob=work;try{await work;}finally{if(namespaceJob===work)namespaceJob=null;}
   }
@@ -94,11 +94,14 @@ window.elD90AWSConnections = { async render(host, opts) {
     try{
       if(namespaceJob)await namespaceJob;if(!current()||own!==epoch)return;
       if(!imported){await prepareNamespaces();return;}
-      const namespace=q('#aws-namespace').value.trim();if(!namespace){status('Enter a namespace you have access to, then choose Connect to cluster.');q('#aws-namespace').focus();return;}
-      const check=opts.demo?{canListPods:true}:await opts.invoke('connections:test',{context:imported.context,namespace});if(!current()||own!==epoch)return;
-      if(!check.canListPods){status(check.message);return;}
+      const namespaces=[...new Set(q('#aws-namespace').value.split(/[\s,]+/).filter(Boolean))];if(!namespaces.length){status('Enter a namespace you have access to, then choose Connect to cluster.');q('#aws-namespace').focus();return;}
+      if(namespaces.some(name=>! /^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(name))){status('Enter a valid Kubernetes namespace (up to 63 lowercase letters, digits or dashes). Separate namespaces with commas or spaces.');return;}
+      for(const namespace of namespaces){
+        const check=opts.demo?{canListPods:true}:await opts.invoke('connections:test',{context:imported.context,namespace});if(!current()||own!==epoch)return;
+        if(!check.canListPods){status(namespace+': '+check.message);return;}
+      }
       status('Opening cluster workspace…');
-      await opts.onEKSConnect?.(imported.context,namespace);
+      await opts.onEKSConnect?.(imported.context,namespaces);
       if(current()&&own===epoch)showSummary('Cluster connected', true);
     }catch(error){if(current()&&own===epoch)status(error.message);}finally{connectPending=false;if(current()&&own===epoch)q('#aws-connect').disabled=false;}
   };
@@ -161,6 +164,7 @@ window.elD90AWSConnections = { async render(host, opts) {
       : message;
   };
   function floatingChoices(anchor, panel, search = anchor) {
+    panel.dataset.tracksAnchor = 'true';
     function position() {
       const rect = anchor.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom - 12;
@@ -186,14 +190,21 @@ window.elD90AWSConnections = { async render(host, opts) {
     function onLayoutChange(event) {
       if (event.target instanceof Node && panel.contains(event.target)) return;
       const rect = anchor.getBoundingClientRect();
-      if (rect.bottom <= 0 || rect.top >= window.innerHeight) close();
+      let clipped = rect.bottom <= 0 || rect.top >= window.innerHeight;
+      for (let parent = anchor.parentElement; parent && !clipped; parent = parent.parentElement) {
+        if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflowY)) continue;
+        const bounds = parent.getBoundingClientRect();
+        clipped = rect.bottom <= bounds.top || rect.top >= bounds.bottom;
+      }
+      if (clipped) close();
       else position();
     }
     panel.addEventListener('toggle', () => {
       const open = panel.matches(':popover-open');
       anchor.setAttribute('aria-expanded', String(open));
       const listener = open ? 'addEventListener' : 'removeEventListener';
-      host[listener]('scroll', onLayoutChange, true);
+      document[listener]('scroll', onLayoutChange, true);
+      window[listener]('resize', onLayoutChange);
     });
     function keys(event) {
       if (event.key === 'Escape' && panel.matches(':popover-open')) {

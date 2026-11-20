@@ -222,3 +222,11 @@
   max-width: min(360px, calc(100vw - 48px));
   margin: 0;
 }
+
+#aws-connections #aws-namespace-status {
+  grid-column: 3;
+  grid-row: 2;
+  color: var(--accent);
+  margin-top: 4px;
+  line-height: 1.4;
+}

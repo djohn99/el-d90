@@ -15,6 +15,23 @@ let requestEpoch = 0, detailEpoch = 0;let sessionUI,workspaceUI,detailLogViewer,
 let state = { demo: false, forcedDemo: false, demoAvailable: false, context: '', namespace: '*', view: 'overview', items: [], selected: null, selectedKind: '', tab: 'summary', generation: 0, detailGeneration: 0, streamGeneration: 0, logs: null, terminal: null, terminalInstance: null, loading: false, contexts: [], catalogue: [], dynamicResource: '', namespaceError: '', namespacesKnown: false, discoveryError: '', discoveryPartial: false, namespaces: [], namespaceNames: [], logText: '', historySettings: {}, initialized: false };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const hidden = (id, hide) => $(id).classList.toggle('hidden', hide);
+// Fixed-position menus must not remain behind when their page or table moves.
+function dismissFloatingMenus(event) {
+  for (const panel of document.querySelectorAll(':popover-open, #context-popover:not(.hidden), #namespace-popover:not(.hidden)')) {
+    if (panel.dataset.tracksAnchor || (event.target instanceof Node && panel.contains(event.target))) continue;
+    if (panel.matches(':popover-open')) panel.hidePopover();
+    else {
+      if (panel.id === 'context-popover') closeContextPicker();
+      else {
+        panel.classList.add('hidden');
+        $('namespace-multi').setAttribute('aria-expanded', 'false');
+      }
+    }
+  }
+}
+document.addEventListener('scroll', dismissFloatingMenus, true);
+window.addEventListener('resize', dismissFloatingMenus);
+
 function notice(text = '', info = false) { $('notice').textContent = text; $('notice').classList.toggle('info', info); hidden('notice', !text); }
 function error(e) { notice(e.message || String(e)); }
 function age(date) {
@@ -1015,4 +1032,4 @@ async function openFeatureResource(target){++workspaceIntent;if(!target.context)
 async function configureCatalogChart(chart){const owner=state;if(!owner.context)throw Error('Choose a cluster before configuring an installation');const pending=navigate('helm'),intent=workspaceIntent,generation=await pending;if(state!==owner||owner.view!=='helm'||owner.generation!==generation||workspaceIntent!==intent||!$('helm-install-panel'))return;const ids={name:chart.name,namespace:chart.namespace,chart:chart.chart,version:chart.version,values:chart.values};$('helm-install-panel').open=true;for(const[key,value]of Object.entries(ids)){const field=$('helm-install-'+key);if(field){field.value=value;field.dispatchEvent(new Event('input',{bubbles:true}));}}$('helm-install-preview')?.focus();notice('Catalog chart loaded. Review the explicit cluster, release namespace and values, then Preview before confirming installation.',true);}
 async function renderFeature(view,owner,isCurrent){const host=$('special-content'),opts={invoke,demo:owner.demo,context:owner.context,namespaces:[...owner.namespaces],contexts:owner.contexts,isCurrent,onOpenResource:target=>openFeatureResource(target).catch(error)};if(view==='projects')return window.elD90Projects.render(host,opts);if(view==='catalog')return window.elD90Catalog.render(host,{...opts,onConfigureChart:chart=>configureCatalogChart(chart).catch(error)});if(view==='gitops')return window.elD90GitOps.render(host,{...opts,requestId:owner.readRequestId});if(view==='connections')return window.elD90Connections.render(host,{...opts,onSourcesLinked:chooseLinkedContext,onEKSConnect:(context,namespace)=>openImportedEKS(context,namespace,owner),onConnect:(context,namespace)=>applySavedView({context,namespaces:[namespace],view:'overview',demo:owner.demo})});if(view==='extensions')return window.elD90Extensions.render(host,{...opts,onChanged:data=>loadExtensions(data)});if(view==='extension-page'){const page=window.elD90ExtensionModel.contributions(extensionCache).pages.find(p=>p.extensionId===owner.extensionPage?.extensionId&&p.id===owner.extensionPage?.id);if(!page){host.innerHTML='<p class="empty">This extension page is disabled or removed. Open Extensions to manage installed manifests.</p>';return;}return window.elD90Extensions.renderPage(host,{...opts,page});}}
 
-async function openImportedEKS(context,namespace,owner){if(!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(namespace))throw Error('Enter a valid Kubernetes namespace (up to 63 lowercase letters, digits or dashes).');const intent=++workspaceIntent;const result=owner.demo?window.demoWorkspace.contexts:await invoke('kube:contexts');if(state!==owner||intent!==workspaceIntent)return;for(const workspace of clusterWorkspaces.values())workspace.contexts=result.contexts;owner.contexts=result.contexts;$('context').innerHTML='<option value="">Choose a context…</option>'+result.contexts.map(c=>'<option value="'+escape(c.name)+'">'+escape(c.name)+'</option>').join('');$('context').value=owner.context;await applySavedView({context,namespaces:[namespace],view:'overview',demo:owner.demo});}
+async function openImportedEKS(context,namespace,owner){const namespaces=Array.isArray(namespace)?namespace:[namespace];if(!namespaces.length||namespaces.some(namespace=>!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(namespace)))throw Error('Enter a valid Kubernetes namespace (up to 63 lowercase letters, digits or dashes).');const intent=++workspaceIntent;const result=owner.demo?window.demoWorkspace.contexts:await invoke('kube:contexts');if(state!==owner||intent!==workspaceIntent)return;for(const workspace of clusterWorkspaces.values())workspace.contexts=result.contexts;owner.contexts=result.contexts;$('context').innerHTML='<option value="">Choose a context…</option>'+result.contexts.map(c=>'<option value="'+escape(c.name)+'">'+escape(c.name)+'</option>').join('');$('context').value=owner.context;await applySavedView({context,namespaces,view:'overview',demo:owner.demo});}

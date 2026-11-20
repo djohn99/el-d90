@@ -77,10 +77,21 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   await namespaceOption.click();
   assert.equal(fs.readFileSync(config, 'utf8'), originalAWS); assert.equal(fs.readFileSync(kubeconfig, 'utf8'), originalKube);
   const settings = YAML.parse(fs.readFileSync(path.join(profile, 'settings.yaml'), 'utf8')); assert.equal(settings.kubeconfig.paths[0], kubeconfig); assert.equal(settings.kubeconfig.paths.length, 2); const managed = YAML.parse(fs.readFileSync(settings.kubeconfig.paths[1], 'utf8')); assert.equal(managed.users[0].user.exec.args.at(-1), 'company-sso'); assert.equal(managed.users[0].user.token, undefined); assert.equal(fs.statSync(settings.kubeconfig.paths[1]).mode & 0o777, 0o600);
-  await page.locator('#aws-namespace').fill('invalid namespace');await page.locator('#aws-connect').click();await page.locator('#aws-status').filter({hasText:'valid Kubernetes namespace'}).waitFor();assert.equal(await page.evaluate(()=>state.context),'fixture-a');
+  await page.locator('#aws-namespace').fill('invalid_namespace');await page.locator('#aws-connect').click();await page.locator('#aws-status').filter({hasText:'valid Kubernetes namespace'}).waitFor();assert.equal(await page.evaluate(()=>state.context),'fixture-a');
   await page.locator('#aws-namespace').fill('team'); await page.locator('#aws-connect').click(); await page.waitForFunction(() => state.context === 'el-d90:company-sso:eu-west-1:platform' && !state.loading); assert.deepEqual(await page.evaluate(() => state.namespaces), ['team']);
   await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('connections:namespaces');ipcMain.handle('connections:namespaces',()=>({namespaces:['team'],message:'Choose namespace'}));ipcMain.removeHandler('connections:test');ipcMain.handle('connections:test',()=>({canListPods:true}));});
   await openAWS(); await page.locator('#aws-profile option[value=company-sso]').waitFor({ state: 'attached' });
+  await page.locator('#aws-clusters-load').click();
+  await page.locator('#aws-namespace-options [data-namespace=team]').waitFor({state:'attached'});
+  await app.evaluate(({ipcMain})=>{global.namespaceChecks=[];ipcMain.removeHandler('connections:test');ipcMain.handle('connections:test',(_event,input)=>{global.namespaceChecks.push(input.namespace);return {canListPods:input.namespace!=='denied',message:'Access denied'};});});
+  await page.locator('#aws-namespace').fill('team, denied');await page.locator('#aws-connect').click();
+  await page.locator('#aws-status').filter({hasText:'denied: Access denied'}).waitFor();
+  assert.equal(await page.locator('#aws-connect').isVisible(),true);
+  await page.locator('#aws-namespace').fill('team, staging production,team');await page.locator('#aws-connect').click();
+  await page.waitForFunction(()=>state.view==='overview'&&!state.loading);
+  assert.deepEqual(await page.evaluate(()=>state.namespaces),['team','staging','production']);
+  assert.deepEqual(await app.evaluate(()=>global.namespaceChecks),['team','denied','team','staging','production']);
+  await openAWS(); await page.locator('#aws-profile option[value=company-sso]').waitFor({state:'attached'});
   // An older list or import must not become the selected connection after profile changes.
   await app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('aws:clusters'); ipcMain.handle('aws:clusters', () => new Promise(resolve => { (global.pendingAWSClusters ||= []).push(resolve);global.finishAWSClusters = global.pendingAWSClusters[0]; })); }); await page.locator('#aws-clusters-load').click(); await page.locator('#aws-profile').selectOption('other-sso');await page.locator('#aws-namespace').fill('team');assert.equal(await page.locator('#aws-namespace-options [data-namespace=team]').count(),0);await page.locator('#aws-namespace').fill(''); await app.evaluate(() => global.finishAWSClusters({ clusters: ['WRONG-OLD-CLUSTER'] })); assert.equal(await page.locator('#aws-cluster option[value=WRONG-OLD-CLUSTER]').count(), 0);
   await app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('aws:connect'); ipcMain.handle('aws:connect', () => new Promise(resolve => { global.finishAWSConnect = resolve; })); });await page.locator('#aws-cluster-name').fill('known-cluster');await page.waitForTimeout(650); await page.locator('#aws-profile').selectOption('company-sso'); await app.evaluate(() => global.finishAWSConnect({ context: 'wrong-context', message: 'wrong selection' }));await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('aws:connect');ipcMain.handle('aws:connect',()=>({context:'fixture-a'}));}); assert.equal(await page.locator('#aws-open').isDisabled(), true);
@@ -106,6 +117,21 @@ if(a[0]==='config'&&a[1]==='view'){const result={apiVersion:'v1',kind:'Config','
   await accountTrigger.click();
   const menu=page.locator('#sso-account-menu');
   await menu.waitFor();
+  // Scroll events from ancestors outside the AWS host must update the top-layer menu.
+  await page.waitForTimeout(100);
+  await accountTrigger.evaluate(el => { el.style.transform = 'translateY(12px)'; });
+  await page.evaluate(() => document.querySelector('main').dispatchEvent(new Event('scroll')));
+  await page.waitForTimeout(50);
+  assert.equal(await menu.isVisible(), true);
+  const anchored = await page.evaluate(() => {
+    const trigger = document.querySelector('#sso-account-trigger').getBoundingClientRect();
+    const panel = document.querySelector('#sso-account-menu').getBoundingClientRect();
+    return Math.min(Math.abs(panel.top - trigger.bottom - 4), Math.abs(trigger.top - panel.bottom - 4));
+  });
+  assert.ok(anchored < 2, 'account menu stays anchored on ancestor scroll');
+  await accountTrigger.evaluate(el => { el.style.transform = ''; });
+  await page.evaluate(() => document.querySelector('main').dispatchEvent(new Event('scroll')));
+
   assert.deepEqual(await page.locator('.aws-cluster-stage').boundingBox(),clusterBefore);
   const accountSearch=page.locator('#sso-account-search');
   const formatted=page.locator('#sso-account [data-choice="123456789012"]');
