@@ -35,6 +35,15 @@ function dismissFloatingMenus(event) {
     }
   }
 }
+document.addEventListener('beforetoggle', event => {
+  const panel = event.target;
+  if (event.newState !== 'open' || !panel.matches('[popover]')) return;
+  const anchor = document.querySelector('[popovertarget="' + CSS.escape(panel.id) + '"]');
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  panel.dataset.anchorTop = rect.top;
+  panel.dataset.anchorLeft = rect.left;
+}, true);
 document.addEventListener('scroll', dismissFloatingMenus, true);
 window.addEventListener('resize', dismissFloatingMenus);
 
