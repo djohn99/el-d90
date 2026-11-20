@@ -307,7 +307,7 @@ async function openDetail(object, kind, restoring = false) {
   $('apply-yaml').disabled = $('validate-yaml').disabled = kind === 'helm'; $('yaml-editor').readOnly = kind === 'helm'; $('forward-result').textContent = ''; $('forward-remote').value = String(object.spec?.ports?.[0]?.port || object.spec?.containers?.[0]?.ports?.[0]?.containerPort || 80);
   for(const [name,applicable]of Object.entries({logs:['pods','deployments'].includes(kind),terminal:['pods','nodes'].includes(kind),forward:['pods','services'].includes(kind),events:!!object.metadata.uid&&kind!=='helm'}))document.querySelector('[data-tab="'+name+'"]').classList.toggle('hidden',!applicable);
   $('open-terminal-session').classList.toggle('hidden',kind!=='pods');
-  $('logs-scope').textContent=kind==='deployments'?'All replica pods · pod/container prefixes · new replicas followed · initial 300 lines per pod':'Pod container logs · initial 300 lines';
+  $('logs-scope').textContent=kind==='deployments'?'All replica pods · pod/container prefixes · new replicas followed · initial 10,000 lines per pod':'Pod container logs · initial 10,000 lines';
   if(object.kind==='Event'){const ev=window.elD90Events.normalize(object);$('detail-summary').innerHTML='<dl>'+Object.entries(ev).map(([k,v])=>`<dt>${escape(k)}</dt><dd class="event-message">${escape(v)}</dd>`).join('')+'</dl>';}
   addResourceActions(object, kind); if(kind!=='helm')addManagementActions(object,kind);if(kind==='nodes'){const owner=state,epoch=state.detailGeneration;window.elD90NodePods.render($('detail-summary'),{node:object,context:owner.context,demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.detailGeneration===epoch,onOpen:pod=>openDetail(pod,'pods')});window.elD90Nodes.render($('detail-node-access'),{node:object,context:owner.context,namespace:owner.namespaces.length===1?owner.namespaces[0]:'',demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.detailGeneration===epoch,onSession:result=>acceptNodeSession(owner,object,result,epoch)});}
   const dismissed=dismissedDrafts.get(draftKey());if(dismissed)state.originalYaml=dismissed.original;$('yaml-editor').value = restoring ? state.yamlDraft || '' : dismissed?.yaml??''; $('yaml-result').textContent = ''; detailLogViewer?.reset(restoring?state.logText||'':''); hidden('drawer', false); await tab(restoring ? state.savedTab || 'summary' : 'summary', restoring);workspaceUI?.detail(object,kind).catch(error);paintExtensionDetails(object,kind);attachResourceData(object,kind);richEditor?.sync();resourceForms?.sync();
@@ -494,7 +494,7 @@ document.addEventListener('keydown', e => {if((e.metaKey||e.ctrlKey)&&e.shiftKey
 window.eld90?.onStream(message => {
   const owner=[...clusterWorkspaces.values()].find(w=>w.logs===message.id || w.terminal===message.id) || (state.logs===message.id || state.terminal===message.id ? state:null);
   if(!owner) return;
-  if(message.id===owner.logs) {owner.logText=((owner.logText||'')+message.data).slice(-1000000);if(owner===state)detailLogViewer?.setBuffer(owner.logText);if(message.ended)owner.logs=null;}
+  if(message.id===owner.logs) {owner.logText=window.elD90LogModel.retain((owner.logText||'')+message.data);if(owner===state)detailLogViewer?.setBuffer(owner.logText);if(message.ended)owner.logs=null;}
   if(message.id===owner.terminal){owner.terminalBuffer=((owner.terminalBuffer||'')+message.data).slice(-1000000);owner.terminalInstance?.write(message.data);if(message.ended)owner.terminal=null;}
 });
 

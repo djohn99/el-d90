@@ -124,7 +124,7 @@ function start(input, options = {}) {
     const args = ['logs', podName, '--context', context, '--namespace', namespace, '--request-timeout=0', '--timestamps=true', '--prefix=true'];
     if (container === '*') args.push('--all-containers=true', '--max-log-requests=100'); else args.push('--container', container);
     if (previous) args.push('--previous'); else args.push('--follow');
-    if (record.lastTimestamp && !previous) args.push('--since-time=' + record.lastTimestamp); else args.push('--tail=300');
+    if (record.lastTimestamp && !previous) args.push('--since-time=' + record.lastTimestamp); else args.push('--tail=10000');
     emit(`[${podName}] Attaching ${previous ? 'previous-container snapshot' : 'log stream'}${container === '*' ? ' · all containers' : ` · ${container}`}\n`);
     let child;
     try {
