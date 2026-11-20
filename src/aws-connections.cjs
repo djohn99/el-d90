@@ -34,7 +34,8 @@ function binary() {
   throw Error('AWS CLI not found');
 }
 function run(args, options = {}) {
-  const env = { ...kube.environment(), AWS_PAGER: '', AWS_CLI_AUTO_PROMPT: 'off' };
+  const profileIndex=args.indexOf('--profile');
+  const env = { ...require('./system-trust.cjs').awsEnvironment(kube.environment(),profileIndex>=0?args[profileIndex+1]:undefined), AWS_PAGER: '', AWS_CLI_AUTO_PROMPT: 'off' };
   for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_SECURITY_TOKEN']) delete env[key];
   return new Promise((resolve, reject) => {
     const child = spawn(options.binary || binary(), [...args, '--no-cli-pager'], { shell: false, env, stdio: ['ignore', 'pipe', 'pipe'], signal: options.signal });
@@ -88,6 +89,13 @@ class AWSConnections {
     for(const [label,args]of [['Identity',['sts','get-caller-identity','--profile',profile.name,'--output','json']],['EKS cluster listing',['eks','list-clusters','--profile',profile.name,'--region',selectedRegion,'--output','json']]]){
       try{const result=JSON.parse(await this.run(args,{timeout:10000}));checks.push({name:label,ok:true,message:label==='Identity'?'Selected profile authenticated.':String(result.clusters?.length||0)+' EKS clusters returned.'});}
       catch(error){checks.push({name:label,ok:false,message:safeError(error),...(Number.isInteger(error.exitCode)?{exitCode:error.exitCode}:{})});}
+    }
+    if(input.cluster){
+      const name=text(input.cluster,'EKS cluster',100);if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(name))throw Error('Invalid EKS cluster');
+      const provider=new (require('./kube-exec-auth.cjs').ContextExecAuth)({apiVersion:'client.authentication.k8s.io/v1beta1',command:executable,args:['--region',selectedRegion,'eks','get-token','--cluster-name',name,'--output','json','--profile',profile.name],env:[{name:'AWS_PROFILE',value:profile.name}]},{},env);
+      try{await provider.credential();checks.push({name:'EKS token generation',ok:true,message:'The selected profile generated a valid Kubernetes credential. No token is displayed.'});}
+      catch(error){checks.push({name:'EKS token generation',ok:false,message:error.credentialCode?error.message:'Credential plugin setup failed. Check the AWS executable and kubeconfig exec configuration.'});}
+      finally{provider.close();}
     }
     return {executable,version,profile:profile.name,region:selectedRegion,environment:{proxyConfigured:!!(env.HTTPS_PROXY||env.https_proxy||env.HTTP_PROXY||env.http_proxy),caBundleConfigured:!!(env.AWS_CA_BUNDLE),configOverride:!!env.AWS_CONFIG_FILE,credentialsOverride:!!env.AWS_SHARED_CREDENTIALS_FILE,endpointOverride:!!(env.AWS_ENDPOINT_URL||env.AWS_ENDPOINT_URL_EKS)},checks};
   }

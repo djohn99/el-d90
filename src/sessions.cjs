@@ -5,7 +5,7 @@ class Sessions{
  constructor(options={}){this.options=options;this.entries=new Map();}
  _reserve(input,type,transport){const context=kube.string(input.context,'context');if(this.entries.size>=64||[...this.entries.values()].filter(e=>e.context===context).length>=16)throw Error('Close a session first (16 per cluster, 64 total)');const entry={id:randomUUID(),context,namespace:input.namespace||'',type,transport,resource:input.resource||'',name:input.name||'',state:'starting',buffer:'',seq:0,createdAt:new Date().toISOString(),closed:false};this.entries.set(entry.id,entry);return entry;}
  _public(e){return{id:e.id,context:e.context,namespace:e.namespace,type:e.type,transport:e.transport,resource:e.resource,name:e.name,state:e.state,createdAt:e.createdAt,shell:e.shell||null,cwd:e.cwd||null};}
- _send(e,data='',ended=false){if(this.entries.get(e.id)!==e)return;e.buffer=(e.buffer+String(data)).slice(-MAX_BUFFER);const message={...this._public(e),data:String(data),seq:++e.seq,ended};try{this.options.onData?.(message);}catch{}}
+ _send(e,data='',ended=false){if(this.entries.get(e.id)!==e)return;e.buffer=(e.type==='logs'?require('./log-model.js').retain(e.buffer+String(data)):(e.buffer+String(data)).slice(-MAX_BUFFER));const message={...this._public(e),data:String(data),seq:++e.seq,ended};try{this.options.onData?.(message);}catch{}}
  _finish(e,message,state='ended'){if(e.closed)return e.finished;e.closed=true;e.state=state;this._send(e,message,true);e.finished=Promise.resolve().then(()=>e.cleanup?.()).catch(error=>{e.state='error';this._send(e,'\r\nSession cleanup failed: '+error.message+'\r\n',true);});return e.finished;}
  _spawn(e,command,args,options={}){
   if(e.closed)throw Error('Session was cancelled');

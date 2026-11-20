@@ -15,6 +15,38 @@ let requestEpoch = 0, detailEpoch = 0;let sessionUI,workspaceUI,detailLogViewer,
 let state = { demo: false, forcedDemo: false, demoAvailable: false, context: '', namespace: '*', view: 'overview', items: [], selected: null, selectedKind: '', tab: 'summary', generation: 0, detailGeneration: 0, streamGeneration: 0, logs: null, terminal: null, terminalInstance: null, loading: false, contexts: [], catalogue: [], dynamicResource: '', namespaceError: '', namespacesKnown: false, discoveryError: '', discoveryPartial: false, namespaces: [], namespaceNames: [], logText: '', historySettings: {}, initialized: false };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const hidden = (id, hide) => $(id).classList.toggle('hidden', hide);
+// Fixed-position menus must not remain behind when their page or table moves.
+function dismissFloatingMenus(event) {
+  for (const panel of document.querySelectorAll(':popover-open, #context-popover:not(.hidden), #namespace-popover:not(.hidden)')) {
+    if (panel.dataset.tracksAnchor || (event.target instanceof Node && panel.contains(event.target))) continue;
+    const anchor = panel.id === 'context-popover' ? contextPickerAnchor : panel.id === 'namespace-popover' ? $('namespace-multi') : document.querySelector('[popovertarget="' + CSS.escape(panel.id) + '"]');
+    if (event.type === 'scroll' && event.target instanceof Element && anchor && !event.target.contains(anchor)) continue;
+    if (event.type === 'scroll' && anchor && panel.dataset.anchorTop !== undefined) {
+      const rect = anchor.getBoundingClientRect();
+      if (Math.abs(rect.top - Number(panel.dataset.anchorTop)) < 1 && Math.abs(rect.left - Number(panel.dataset.anchorLeft)) < 1) continue;
+    }
+    if (panel.matches(':popover-open')) panel.hidePopover();
+    else {
+      if (panel.id === 'context-popover') closeContextPicker();
+      else {
+        panel.classList.add('hidden');
+        $('namespace-multi').setAttribute('aria-expanded', 'false');
+      }
+    }
+  }
+}
+document.addEventListener('beforetoggle', event => {
+  const panel = event.target;
+  if (event.newState !== 'open' || !panel.matches('[popover]')) return;
+  const anchor = document.querySelector('[popovertarget="' + CSS.escape(panel.id) + '"]');
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  panel.dataset.anchorTop = rect.top;
+  panel.dataset.anchorLeft = rect.left;
+}, true);
+document.addEventListener('scroll', dismissFloatingMenus, true);
+window.addEventListener('resize', dismissFloatingMenus);
+
 function notice(text = '', info = false) { $('notice').textContent = text; $('notice').classList.toggle('info', info); hidden('notice', !text); }
 function error(e) { notice(e.message || String(e)); }
 function age(date) {
@@ -307,7 +339,7 @@ async function openDetail(object, kind, restoring = false) {
   $('apply-yaml').disabled = $('validate-yaml').disabled = kind === 'helm'; $('yaml-editor').readOnly = kind === 'helm'; $('forward-result').textContent = ''; $('forward-remote').value = String(object.spec?.ports?.[0]?.port || object.spec?.containers?.[0]?.ports?.[0]?.containerPort || 80);
   for(const [name,applicable]of Object.entries({logs:['pods','deployments'].includes(kind),terminal:['pods','nodes'].includes(kind),forward:['pods','services'].includes(kind),events:!!object.metadata.uid&&kind!=='helm'}))document.querySelector('[data-tab="'+name+'"]').classList.toggle('hidden',!applicable);
   $('open-terminal-session').classList.toggle('hidden',kind!=='pods');
-  $('logs-scope').textContent=kind==='deployments'?'All replica pods · pod/container prefixes · new replicas followed · initial 300 lines per pod':'Pod container logs · initial 300 lines';
+  $('logs-scope').textContent=kind==='deployments'?'All replica pods · pod/container prefixes · new replicas followed · initial 10,000 lines per pod':'Pod container logs · initial 10,000 lines';
   if(object.kind==='Event'){const ev=window.elD90Events.normalize(object);$('detail-summary').innerHTML='<dl>'+Object.entries(ev).map(([k,v])=>`<dt>${escape(k)}</dt><dd class="event-message">${escape(v)}</dd>`).join('')+'</dl>';}
   addResourceActions(object, kind); if(kind!=='helm')addManagementActions(object,kind);if(kind==='nodes'){const owner=state,epoch=state.detailGeneration;window.elD90NodePods.render($('detail-summary'),{node:object,context:owner.context,demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.detailGeneration===epoch,onOpen:pod=>openDetail(pod,'pods')});window.elD90Nodes.render($('detail-node-access'),{node:object,context:owner.context,namespace:owner.namespaces.length===1?owner.namespaces[0]:'',demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.detailGeneration===epoch,onSession:result=>acceptNodeSession(owner,object,result,epoch)});}
   const dismissed=dismissedDrafts.get(draftKey());if(dismissed)state.originalYaml=dismissed.original;$('yaml-editor').value = restoring ? state.yamlDraft || '' : dismissed?.yaml??''; $('yaml-result').textContent = ''; detailLogViewer?.reset(restoring?state.logText||'':''); hidden('drawer', false); await tab(restoring ? state.savedTab || 'summary' : 'summary', restoring);workspaceUI?.detail(object,kind).catch(error);paintExtensionDetails(object,kind);attachResourceData(object,kind);richEditor?.sync();resourceForms?.sync();
@@ -425,6 +457,7 @@ function toggleContextPicker(anchor) {
   $('context-search').value = '';
   renderContextPicker();
   const rect = anchor.getBoundingClientRect(), popover = $('context-popover');
+  popover.dataset.anchorTop = rect.top; popover.dataset.anchorLeft = rect.left;
   popover.style.top = Math.min(rect.bottom + 6, window.innerHeight - 180) + 'px';
   popover.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 410)) + 'px';
   $('context-options').style.maxHeight = Math.max(100, window.innerHeight - rect.bottom - 130) + 'px';
@@ -494,7 +527,7 @@ document.addEventListener('keydown', e => {if((e.metaKey||e.ctrlKey)&&e.shiftKey
 window.eld90?.onStream(message => {
   const owner=[...clusterWorkspaces.values()].find(w=>w.logs===message.id || w.terminal===message.id) || (state.logs===message.id || state.terminal===message.id ? state:null);
   if(!owner) return;
-  if(message.id===owner.logs) {owner.logText=((owner.logText||'')+message.data).slice(-1000000);if(owner===state)detailLogViewer?.setBuffer(owner.logText);if(message.ended)owner.logs=null;}
+  if(message.id===owner.logs) {owner.logText=window.elD90LogModel.retain((owner.logText||'')+message.data);if(owner===state)detailLogViewer?.setBuffer(owner.logText);if(message.ended)owner.logs=null;}
   if(message.id===owner.terminal){owner.terminalBuffer=((owner.terminalBuffer||'')+message.data).slice(-1000000);owner.terminalInstance?.write(message.data);if(message.ended)owner.terminal=null;}
 });
 
@@ -735,7 +768,7 @@ function openNamespacePicker() {
   const selected=new Set(state.namespaces);$('namespace-options').innerHTML=state.namespaceNames.map(ns=>`<label><input type="checkbox" value="${escape(ns)}" ${selected.has(ns)?'checked':''}>${escape(ns)}</label>`).join('');
   $('namespace-wildcard').checked=state.namespaces.length===0;
   $('namespace-options').querySelectorAll('input').forEach(input=>input.onchange=()=>{$('namespace-wildcard').checked=![...$('namespace-options').querySelectorAll('input:checked')].length;setNamespaceSelection([...$('namespace-options').querySelectorAll('input:checked')].map(i=>i.value),true).catch(error);});
-  const rect=$('namespace-multi').getBoundingClientRect();$('namespace-popover').style.top=`${rect.bottom+7}px`;$('namespace-popover').style.left=`${Math.max(8,Math.min(rect.right-325,window.innerWidth-335))}px`;$('namespace-options').style.maxHeight=`${Math.max(100,window.innerHeight-rect.bottom-200)}px`;
+  const rect=$('namespace-multi').getBoundingClientRect();$('namespace-popover').dataset.anchorTop=rect.top;$('namespace-popover').dataset.anchorLeft=rect.left;$('namespace-popover').style.top=`${rect.bottom+7}px`;$('namespace-popover').style.left=`${Math.max(8,Math.min(rect.right-325,window.innerWidth-335))}px`;$('namespace-options').style.maxHeight=`${Math.max(100,window.innerHeight-rect.bottom-200)}px`;
   hidden('namespace-popover',!opening);$('namespace-multi').setAttribute('aria-expanded',String(opening));if(opening)$('namespace-search').focus();
 }
 $('namespace-multi').onclick=openNamespacePicker;
@@ -1015,4 +1048,4 @@ async function openFeatureResource(target){++workspaceIntent;if(!target.context)
 async function configureCatalogChart(chart){const owner=state;if(!owner.context)throw Error('Choose a cluster before configuring an installation');const pending=navigate('helm'),intent=workspaceIntent,generation=await pending;if(state!==owner||owner.view!=='helm'||owner.generation!==generation||workspaceIntent!==intent||!$('helm-install-panel'))return;const ids={name:chart.name,namespace:chart.namespace,chart:chart.chart,version:chart.version,values:chart.values};$('helm-install-panel').open=true;for(const[key,value]of Object.entries(ids)){const field=$('helm-install-'+key);if(field){field.value=value;field.dispatchEvent(new Event('input',{bubbles:true}));}}$('helm-install-preview')?.focus();notice('Catalog chart loaded. Review the explicit cluster, release namespace and values, then Preview before confirming installation.',true);}
 async function renderFeature(view,owner,isCurrent){const host=$('special-content'),opts={invoke,demo:owner.demo,context:owner.context,namespaces:[...owner.namespaces],contexts:owner.contexts,isCurrent,onOpenResource:target=>openFeatureResource(target).catch(error)};if(view==='projects')return window.elD90Projects.render(host,opts);if(view==='catalog')return window.elD90Catalog.render(host,{...opts,onConfigureChart:chart=>configureCatalogChart(chart).catch(error)});if(view==='gitops')return window.elD90GitOps.render(host,{...opts,requestId:owner.readRequestId});if(view==='connections')return window.elD90Connections.render(host,{...opts,onSourcesLinked:chooseLinkedContext,onEKSConnect:(context,namespace)=>openImportedEKS(context,namespace,owner),onConnect:(context,namespace)=>applySavedView({context,namespaces:[namespace],view:'overview',demo:owner.demo})});if(view==='extensions')return window.elD90Extensions.render(host,{...opts,onChanged:data=>loadExtensions(data)});if(view==='extension-page'){const page=window.elD90ExtensionModel.contributions(extensionCache).pages.find(p=>p.extensionId===owner.extensionPage?.extensionId&&p.id===owner.extensionPage?.id);if(!page){host.innerHTML='<p class="empty">This extension page is disabled or removed. Open Extensions to manage installed manifests.</p>';return;}return window.elD90Extensions.renderPage(host,{...opts,page});}}
 
-async function openImportedEKS(context,namespace,owner){if(!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(namespace))throw Error('Enter a valid Kubernetes namespace (up to 63 lowercase letters, digits or dashes).');const intent=++workspaceIntent;const result=owner.demo?window.demoWorkspace.contexts:await invoke('kube:contexts');if(state!==owner||intent!==workspaceIntent)return;for(const workspace of clusterWorkspaces.values())workspace.contexts=result.contexts;owner.contexts=result.contexts;$('context').innerHTML='<option value="">Choose a context…</option>'+result.contexts.map(c=>'<option value="'+escape(c.name)+'">'+escape(c.name)+'</option>').join('');$('context').value=owner.context;await applySavedView({context,namespaces:[namespace],view:'overview',demo:owner.demo});}
+async function openImportedEKS(context,namespace,owner){const namespaces=Array.isArray(namespace)?namespace:[namespace];if(!namespaces.length||namespaces.some(namespace=>!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(namespace)))throw Error('Enter a valid Kubernetes namespace (up to 63 lowercase letters, digits or dashes).');const intent=++workspaceIntent;const result=owner.demo?window.demoWorkspace.contexts:await invoke('kube:contexts');if(state!==owner||intent!==workspaceIntent)return;for(const workspace of clusterWorkspaces.values())workspace.contexts=result.contexts;owner.contexts=result.contexts;$('context').innerHTML='<option value="">Choose a context…</option>'+result.contexts.map(c=>'<option value="'+escape(c.name)+'">'+escape(c.name)+'</option>').join('');$('context').value=owner.context;await applySavedView({context,namespaces,view:'overview',demo:owner.demo});}

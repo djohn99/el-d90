@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.29] - 2026-11-20
+
+- Use macOS-trusted company and public CA certificates automatically for AWS CLI, EKS credentials, and AWS SSO, with explicit CA bundle overrides still supported.
+- Prevent kubeconfig folder refreshes from cancelling newly started EKS credential providers. Show safe credential diagnostics without exposing tokens.
+- Connect to multiple namespaces entered with commas or spaces. Check access to each namespace and open the workspace with all selected; existing single-namespace connections remain supported.
+- Keep AWS dropdowns attached while scrolling and close other floating menus only when their controls move. Show namespace guidance beneath the field in the accent color.
+- Request 10,000 initial log lines, browse retained history in smaller pages, and download filtered logs with icon-only buttons.
+
 ## [0.5.28] - 2026-11-19
 
 - Choose an EKS region from a searchable list of region codes and locations, while retaining profile defaults and manual region entry.

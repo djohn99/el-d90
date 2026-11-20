@@ -156,7 +156,7 @@ const directlyLoggedWorkloads = new Set(['statefulsets', 'daemonsets', 'replicas
 function logArgs(input) {
   const workload = directlyLoggedWorkloads.has(input.resource);
   const target = name(input.name);
-  const args = ['logs', workload ? `${input.resource}/${target}` : target, ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0', '--tail=300', '--timestamps=true'];
+  const args = ['logs', workload ? `${input.resource}/${target}` : target, ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0', '--tail=10000', '--timestamps=true'];
   if (workload) args.push('--all-pods=true', '--prefix=true', '--max-log-requests=20');
   if (input.container) args.push('--container', name(input.container, 'container'));
   if (input.previous) args.push('--previous');

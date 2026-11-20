@@ -13,6 +13,8 @@ assert.equal(await page.locator('[data-summary-field="schedule expression"]').te
 await click('#close-drawer');
 await page.getByRole('button', {name: 'Actions for database-backup'}).click();
 const menu = page.locator('.resource-row-menu:popover-open');
+await page.locator('main').evaluate(el=>el.dispatchEvent(new Event('scroll')));
+await menu.waitFor({state:'visible'});
 assert.deepEqual(await menu.getByRole('button').allTextContents(), ['Trigger', 'Suspend', 'Describe', 'Edit', 'Delete']);
 assert.equal(await page.locator('#drawer').isVisible(), false);
 await menu.getByRole('button', {name: 'Trigger'}).click();
