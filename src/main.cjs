@@ -143,25 +143,17 @@ handle('aws:connect',async input=>{
     const settings=await settingsStore.read(settingsPath());let existing=connections.existingPaths(settings);
     if(!settings.kubeconfig.paths.length)existing=(await Promise.all(existing.map(async file=>await fs.access(file).then(()=>file,()=>null)))).filter(Boolean);
     settings.kubeconfig.paths=[...new Set([...existing,result.file])];const saved=await settingsStore.write(settingsPath(),settingsStore.stringify(settings));
-    kube.setKubeconfigPaths(await connections.resolveFiles(settingsStore.resolvePaths(saved)),{preserveCatalogues:true,explicitSources:true});appliedSettings={...appliedSettings,kubeconfig:saved.kubeconfig};return result;
+    await applyKubeconfigPaths(await connections.resolveFiles(settingsStore.resolvePaths(saved)),{preserveCatalogues:true,explicitSources:true});appliedSettings={...appliedSettings,kubeconfig:saved.kubeconfig};return result;
   });awsRegistration=registration;return registration;
 });
-let kubeconfigSignature = null, kubeconfigSyncing = false;
-const kubeconfigSyncTimer = setInterval(async () => {
-  if (demo || kubeconfigSyncing || !window || window.webContents.isDestroyed()) return;
-  kubeconfigSyncing = true;
-  try {
-    const paths = await connections.resolveFiles(connections.existingPaths(appliedSettings));
-    const signature = JSON.stringify(await Promise.all(paths.map(async file => {
-      try { const stat = await fs.stat(file); return [file, stat.mtimeMs, stat.size, stat.ino]; }
-      catch { return [file, null]; }
-    })));
-    if (kubeconfigSignature !== null && signature !== kubeconfigSignature) {
-      kube.setKubeconfigPaths(paths,{explicitSources:true});
-      watchSend('kubeconfig:changed', {});
-    }
-    kubeconfigSignature = signature;
-  } finally { kubeconfigSyncing = false; }
+const kubeconfigSync = new (require('./kubeconfig-sync.cjs').KubeconfigSync)();
+async function applyKubeconfigPaths(paths,options={}){await kubeconfigSync.register(paths,()=>kube.setKubeconfigPaths(paths,options));}
+const kubeconfigSyncTimer = setInterval(() => {
+  if (demo || !window || window.webContents.isDestroyed()) return;
+  kubeconfigSync.poll(()=>connections.resolveFiles(connections.existingPaths(appliedSettings)),paths=>{
+    kube.setKubeconfigPaths(paths,{explicitSources:true});
+    watchSend('kubeconfig:changed', {});
+  }).catch(()=>{});
 }, 2000);
 kubeconfigSyncTimer.unref();
 
@@ -175,7 +167,7 @@ if(previousContexts.contexts.length){
   await fs.writeFile(path.join(app.getPath('userData'),'previous-kubeconfig-sources.json'),
     JSON.stringify(value.kubeconfig),{mode:0o600});
 }
-value.kubeconfig.paths=[...new Set(checked.sources)];const saved=await settingsStore.write(settingsPath(),settingsStore.stringify(value));kube.setKubeconfigPaths(await connections.resolveFiles(settingsStore.resolvePaths(saved)),{explicitSources:true});appliedSettings={...appliedSettings,kubeconfig:saved.kubeconfig};importPreviews.delete(input.token);watchSend('kubeconfig:changed',{});return{restartRequired:false,paths:value.kubeconfig.paths};});
+value.kubeconfig.paths=[...new Set(checked.sources)];const saved=await settingsStore.write(settingsPath(),settingsStore.stringify(value));await applyKubeconfigPaths(await connections.resolveFiles(settingsStore.resolvePaths(saved)),{explicitSources:true});appliedSettings={...appliedSettings,kubeconfig:saved.kubeconfig};importPreviews.delete(input.token);watchSend('kubeconfig:changed',{});return{restartRequired:false,paths:value.kubeconfig.paths};});
 handle('topology:snapshot',topology.snapshot);
 handle('topology:api',topology.apiInspection);
 handle('editor:parse',editor.parseDocuments);
@@ -199,7 +191,7 @@ handle('kube:contexts', async input => {
   const value = await settingsStore.read(settingsPath());
   value.kubeconfig = settingsStore.normalize({kubeconfig:previous}).kubeconfig;
   const paths = await connections.resolveFiles(connections.existingPaths(value));
-  kube.setKubeconfigPaths(paths,{explicitSources:value.kubeconfig.paths.length>0});
+  await applyKubeconfigPaths(paths,{explicitSources:value.kubeconfig.paths.length>0});
   const restored = await kube.contexts();
   await settingsStore.write(settingsPath(), settingsStore.stringify(value));
   appliedSettings={...appliedSettings,kubeconfig:value.kubeconfig};
@@ -319,7 +311,7 @@ async function createWindow() {
 app.whenReady().then(async () => {
   await require('./runtime-environment.cjs').initialize(path.join(app.getPath('userData'),'aws-network.json'),{loadShell:!process.env.EL_D90_USER_DATA});
   if(!process.env.EL_D90_USER_DATA)await require('./system-trust.cjs').initialize(app.getPath('userData'));
-  try{appliedSettings=await settingsStore.read(settingsPath());kube.setKubeconfigPaths(await connections.resolveFiles(connections.existingPaths(appliedSettings)),{explicitSources:appliedSettings.kubeconfig.paths.length>0});}catch(e){settingsError='Settings could not be loaded: '+e.message;}
+  try{appliedSettings=await settingsStore.read(settingsPath());await applyKubeconfigPaths(await connections.resolveFiles(connections.existingPaths(appliedSettings)),{explicitSources:appliedSettings.kubeconfig.paths.length>0});}catch(e){settingsError='Settings could not be loaded: '+e.message;}
   app.setAboutPanelOptions({applicationName:'el-d90',applicationVersion:app.getVersion(),copyright:'Copyright © 2026 David John',credits:'Created and maintained by David John (@djohn99).\nhttps://github.com/djohn99/el-d90'});
   try{const records=JSON.parse(await fs.readFile(journalPath(),'utf8'));nodes.restoreOwned(records);}catch(e){if(e.code!=='ENOENT')nodeCleanupErrors.set('journal','Debug recovery metadata could not be loaded: '+e.message);}
   const editMenu=Menu.buildFromTemplate([{role:'editMenu'}]).items[0];
