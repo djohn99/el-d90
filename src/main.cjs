@@ -318,6 +318,7 @@ async function createWindow() {
 }
 app.whenReady().then(async () => {
   await require('./runtime-environment.cjs').initialize(path.join(app.getPath('userData'),'aws-network.json'),{loadShell:!process.env.EL_D90_USER_DATA});
+  if(!process.env.EL_D90_USER_DATA)await require('./system-trust.cjs').initialize(app.getPath('userData'));
   try{appliedSettings=await settingsStore.read(settingsPath());kube.setKubeconfigPaths(await connections.resolveFiles(connections.existingPaths(appliedSettings)),{explicitSources:appliedSettings.kubeconfig.paths.length>0});}catch(e){settingsError='Settings could not be loaded: '+e.message;}
   app.setAboutPanelOptions({applicationName:'el-d90',applicationVersion:app.getVersion(),copyright:'Copyright © 2026 David John',credits:'Created and maintained by David John (@djohn99).\nhttps://github.com/djohn99/el-d90'});
   try{const records=JSON.parse(await fs.readFile(journalPath(),'utf8'));nodes.restoreOwned(records);}catch(e){if(e.code!=='ENOENT')nodeCleanupErrors.set('journal','Debug recovery metadata could not be loaded: '+e.message);}

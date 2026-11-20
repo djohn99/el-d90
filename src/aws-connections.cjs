@@ -34,7 +34,8 @@ function binary() {
   throw Error('AWS CLI not found');
 }
 function run(args, options = {}) {
-  const env = { ...kube.environment(), AWS_PAGER: '', AWS_CLI_AUTO_PROMPT: 'off' };
+  const profileIndex=args.indexOf('--profile');
+  const env = { ...require('./system-trust.cjs').awsEnvironment(kube.environment(),profileIndex>=0?args[profileIndex+1]:undefined), AWS_PAGER: '', AWS_CLI_AUTO_PROMPT: 'off' };
   for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_SECURITY_TOKEN']) delete env[key];
   return new Promise((resolve, reject) => {
     const child = spawn(options.binary || binary(), [...args, '--no-cli-pager'], { shell: false, env, stdio: ['ignore', 'pipe', 'pipe'], signal: options.signal });

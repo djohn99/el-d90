@@ -56,7 +56,7 @@ class SSODiscovery {
   }
   async reopen({id}) { const job=this.jobs.get(id);if(!job||job.state!=='running'||!job.authorizationUrl)throw Error('Start a new SSO sign-in to open its approval page.');await this.options.openExternal(job.authorizationUrl);return this.view(job); }
   async authenticate(job) {
-    const client = this.options.oidc?.(job.ssoRegion) || new SSOOIDCClient({ region: job.ssoRegion, ignoreConfiguredEndpointUrls: true, maxAttempts: 2, requestHandler: { connectionTimeout: 10000, requestTimeout: 30000 } }), signal = job.controller.signal;
+    const client = this.options.oidc?.(job.ssoRegion) || new SSOOIDCClient({ region: job.ssoRegion, ignoreConfiguredEndpointUrls: true, maxAttempts: 2, requestHandler: { connectionTimeout: 10000, requestTimeout: 30000, httpsAgent: require('./system-trust.cjs').httpsAgent(require('./runtime-environment.cjs').environment()) } }), signal = job.controller.signal;
     const send = command => client.send(command, { abortSignal: signal });
     try {
       const registration = await send(new RegisterClientCommand({ clientName: 'el-d90 Kubernetes desktop', clientType: 'public', scopes: ['sso:account:access'] })); job.registration = registration;
@@ -77,7 +77,7 @@ class SSODiscovery {
     } finally { if(signal.aborted){job.token=null;job.registration=null;} client.destroy?.(); }
   }
   session(id) { const job = this.jobs.get(id); if (!job || job.state !== 'complete' || !job.token || Date.now() >= job.expiresAt) throw Error('SSO session expired. Sign in again.'); return job; }
-  client(job) { return this.options.sso?.(job.ssoRegion) || new SSOClient({ region: job.ssoRegion, ignoreConfiguredEndpointUrls: true, maxAttempts: 3, requestHandler: { connectionTimeout: 10000, requestTimeout: 30000 } }); }
+  client(job) { return this.options.sso?.(job.ssoRegion) || new SSOClient({ region: job.ssoRegion, ignoreConfiguredEndpointUrls: true, maxAttempts: 3, requestHandler: { connectionTimeout: 10000, requestTimeout: 30000, httpsAgent: require('./system-trust.cjs').httpsAgent(require('./runtime-environment.cjs').environment()) } }); }
   async accounts(job) { const client = this.client(job), result = []; try { for await (const page of paginateListAccounts({ client }, { accessToken: job.token.accessToken }, { abortSignal: job.controller.signal })) { for (const account of page.accountList || []) if (/^\d{12}$/.test(account.accountId)) result.push({ id: account.accountId, name: String(account.accountName || account.accountId).slice(0, 256) }); if (result.length > 10000) throw Error('Too many AWS accounts'); } return result; } finally { client.destroy?.(); } }
   async roles({ id, account }) {
     const job = this.session(id); if (!job.accounts.some(item => item.id === account)) throw Error('Choose an assigned AWS account'); const client = this.client(job), roles = [];
