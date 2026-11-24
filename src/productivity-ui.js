@@ -38,7 +38,9 @@
     }
     const resourceKey = container.id === 'resource-table'
       ? JSON.stringify([container.dataset.sortContext, storageKey]) : null;
-    const state = {key, resourceKey, index: null, direction: 1, ...resourceSortPreferences.get(resourceKey)};
+    // Changing filters starts a fresh result set; switching tables restores its last sort.
+    const restored = previous?.resourceKey === resourceKey ? null : resourceSortPreferences.get(resourceKey);
+    const state = {key, resourceKey, index: null, direction: 1, ...restored};
     tableSorts.set(container, state);
     return state;
   }
