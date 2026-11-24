@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.32] - 2026-11-24
+
+- Save a named view directly from the Pods table. Reopening it restores the selected namespaces, filters, sort column and direction.
+- Each resource table remembers its sort while you switch between views in the same cluster.
+
 ## [0.5.31] - 2026-11-24
 
 - Sorting Pods by Status keeps the newest pods first within each group across namespaces and pages. Refresh places new and changed pods in the correct group and keeps tied rows in a consistent order.
