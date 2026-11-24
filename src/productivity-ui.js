@@ -25,11 +25,20 @@
     const handle={controls,output,clear(){output.textContent='';completions.innerHTML='';},dispose(){editor.removeEventListener('keydown',keydown);controls.remove();completions.remove();output.remove();attached.delete(editor);}};attached.set(editor,handle);return handle;
   }
   const tableSorts = new WeakMap();
+  const resourceSortPreferences = new Map();
   function tableSort(container, storageKey) {
-    const key = JSON.stringify([storageKey, container.dataset.pageFilter]);
+    const key = JSON.stringify([container.dataset.sortContext, storageKey, container.dataset.pageFilter]);
     const previous = tableSorts.get(container);
     if (previous?.key === key) return previous;
-    const state = {key, index: null, direction: 1};
+    // Keep the sort choice across navigation. Row ranks belong only to the active result set.
+    if (previous?.resourceKey && previous.index !== null) {
+      resourceSortPreferences.set(previous.resourceKey, {index: previous.index, direction: previous.direction});
+    } else if (previous?.resourceKey) {
+      resourceSortPreferences.delete(previous.resourceKey);
+    }
+    const resourceKey = container.id === 'resource-table'
+      ? JSON.stringify([container.dataset.sortContext, storageKey]) : null;
+    const state = {key, resourceKey, index: null, direction: 1, ...resourceSortPreferences.get(resourceKey)};
     tableSorts.set(container, state);
     return state;
   }
