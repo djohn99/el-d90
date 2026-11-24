@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.31] - 2026-11-24
+
+- Sorting Pods by Status keeps the newest pods first within each group across namespaces and pages. Refresh places new and changed pods in the correct group and keeps tied rows in a consistent order.
+
 ## [0.5.30] - 2026-11-24
 
 - Pods now sort by creation time across namespaces and pages. Refresh keeps newly discovered pods in chronological order when Age is selected.

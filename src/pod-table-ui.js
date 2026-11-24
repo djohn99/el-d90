@@ -1,4 +1,5 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./node-table-ui.js'):root.elD90NodeTable,typeof module==='object'&&module.exports?require('./resource-row-actions.js'):root.elD90RowActions);if(typeof module==='object'&&module.exports)module.exports=api;else root.elD90PodTable=api;})(typeof window!=='undefined'?window:globalThis,function(nodes,createRowActions){
+ const statusCollator = new Intl.Collator(undefined, {numeric:true, sensitivity:'base'});
  const columns=[['name','Name',true],['warning','Warning',true],['namespace','Namespace',true],['containers','Containers',true],['cpu','CPU',true],['memory','Memory',true],['restarts','Restarts',true],['controller','Controlled By',true],['ip','IP',true],['node','Node',true],['qos','QoS',false],['age','Age',true],['status','Status',true],['actions','Actions',true]];
  function metric(row,key){const values=(row?.containers||[]).map(c=>nodes.quantity(c[key]));if(!values.length||values.some(v=>v===null))return 'Unavailable';const total=values.reduce((a,b)=>a+b,0);return key==='cpu'?total.toFixed(3)+' cores':(total/1024**2).toFixed(1)+' MiB';}
  function cells(pod,extras={}){const m=pod.metadata||{},s=pod.status||{},spec=pod.spec||{},statuses=[...(s.initContainerStatuses||[]),...(s.containerStatuses||[])],owners=(m.ownerReferences||[]).filter(r=>r.controller),metricRow=extras.metrics?.[m.namespace+'/'+m.name];return{name:m.name,warning:statuses.map(c=>c.state?.waiting?.reason||((c.state?.terminated?.exitCode||0)!==0?c.state.terminated.reason:null)).filter(Boolean).join(', ')||(s.phase==='Failed'?s.reason||'Failed':s.conditions?.find(c=>c.type==='PodScheduled'&&c.status==='False')?.reason||'—'),namespace:m.namespace||'—',containers:`${(s.containerStatuses||[]).filter(c=>c.ready).length}/${(spec.containers||[]).length}`+(spec.initContainers?.length?` · ${spec.initContainers.length} init`:''),cpu:metric(metricRow,'cpu'),memory:metric(metricRow,'memory'),restarts:statuses.reduce((n,c)=>n+(c.restartCount||0),0),controller:owners.map(r=>r.kind+'/'+r.name).join(', ')||'None',ip:(s.podIPs||[]).map(p=>p.ip).join(', ')||s.podIP||'—',node:spec.nodeName||'Unscheduled',qos:s.qosClass||'Unavailable',age:m.creationTimestamp,status:s.phase||'Unknown'};}
@@ -9,13 +10,26 @@
  const rowHTML=(pod,i)=>{const values=cells(pod,extras),health=opts.health(pod);for(const [key,,,path]of extensionColumns)values[key]=opts.extensionField?.(pod,path)??'—';values.status=health.label;return `<tr role="button" tabindex="0" aria-label="Open ${esc(values.name)}" data-index="${i}">${displayColumns.map(([key])=>`<td data-pod-column="${key}" title="${esc(key==='containers'?(pod.spec?.containers||[]).map(c=>c.name).join(', '):values[key]??'')}">${key==='containers'?containerHTML(pod,values.containers,esc):key==='actions'?(opts.onAction?menu.markup(pod,i):'<span class="table-action">↗</span>'):key==='status'?`<span class="pill ${health.tone}">${esc(values.status)}</span>`:esc(key==='age'?opts.age(values.age):values[key])}</td>`).join('')}</tr>`;};
  const tableOptions={storageKey:'pods-v2'+(extensionColumns.length?':ext:'+extensionColumns.map(c=>c[0]).join('|'):''),defaultVisible:displayColumns.map(c=>c[2]),lockedColumns:opts.onAction?[0,displayColumns.length-1]:[0],pickerLabel:'Choose Pod columns',onExport:opts.onExport};
  const ageColumn = displayColumns.findIndex(([key]) => key === 'age');
+ const statusColumn = displayColumns.findIndex(([key]) => key === 'status');
+ let statusLabels;
  const created = pods.map(pod => Date.parse(pod.metadata?.creationTimestamp));
- tableOptions.rowComparators = {
-   [ageColumn](left, right, direction) {
+ function compareAge(left, right, direction) {
      const a = created[left], b = created[right];
      if (Number.isNaN(a) || Number.isNaN(b)) return Number.isNaN(a) - Number.isNaN(b);
      return (b - a) * direction;
    }
+ tableOptions.rowComparators = {
+   [statusColumn](left, right, direction) {
+     statusLabels ??= pods.map(pod => opts.health(pod).label);
+     const byStatus = statusCollator.compare(statusLabels[left], statusLabels[right]);
+     if (byStatus) return byStatus * direction;
+     const byAge = compareAge(left, right, 1);
+     if (byAge) return byAge;
+     const a = pods[left].metadata, b = pods[right].metadata;
+     const byNamespace = (a.namespace || '').localeCompare(b.namespace || '');
+     return byNamespace || a.name.localeCompare(b.name);
+   },
+   [ageColumn]: compareAge
  };
  const metricHelp = 'Metrics API usage summed across reported containers. Unavailable means no sample or insufficient permission.';
  const headers = displayColumns.map(([key, label]) => {
