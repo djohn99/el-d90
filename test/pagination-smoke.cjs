@@ -58,6 +58,48 @@ for (const count of [4, 52]) {
   }, count);
   assert.deepEqual(result, ['Open pod-0', 'Open pod-'+(count-1), 'Open pod-'+count]);
 }
+for (const count of [4, 52]) {
+  for (const descending of [false, true]) {
+    const result = await p.evaluate(({count, descending}) => {
+      const host = document.createElement('div');
+      host.id = 'pod-status-fixture';
+      document.body.append(host);
+      const pod = (index, phase) => ({
+        kind: 'Pod', metadata: {name: 'status-'+index, namespace: index%2 ? 'a' : 'b',
+          creationTimestamp: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString()},
+        status: {phase}
+      });
+      try {
+        const pods = Array.from({length: count}, (_, index) => pod(index, 'Running'));
+        renderTable(host.id, pods, 'pods');
+        const toggle = host.querySelector('th[data-pod-column=status] button');
+        toggle.click();
+        if (descending) toggle.click();
+        const visibleNames = () => [...host.querySelectorAll('tbody td[data-pod-column=name]')].map(cell => cell.textContent);
+        const before = visibleNames();
+        renderTable(host.id, [...pods].reverse(), 'pods', Infinity, true);
+        const after = visibleNames();
+        pods[count-1] = pod(count-1, 'Succeeded');
+        pods.push(pod(count, 'Pending'));
+        renderTable(host.id, pods, 'pods', Infinity, true);
+        const labels = () => [...host.querySelectorAll('tbody td[data-pod-column=status]')].map(cell => cell.textContent);
+        const result = labels();
+        const next = host.querySelector('.page-next');
+        if (next && !next.disabled) {
+          next.click();
+          result.push(...labels());
+        }
+        return {before, after, labels: result};
+      } finally {
+        host.remove();
+      }
+    }, {count, descending});
+    const expected = ['Completed', 'Pending', ...Array(count-1).fill('Running')];
+    assert.deepEqual(result.before, Array.from({length:Math.min(count, 50)}, (_, i) => 'status-'+(count-1-i)));
+    assert.deepEqual(result.after, result.before);
+    assert.deepEqual(result.labels, descending ? expected.reverse() : expected);
+  }
+}
 const ordering = await p.evaluate(() => {
   const host = document.createElement('div');
   host.id = 'sort-regression-fixture';
