@@ -145,6 +145,20 @@ function renderTable(target, items, kind, max = Infinity, preserveOrder = false)
     enhance, preserveOrder, onExport: text => invoke('file:save', {text})
   };
   const container = $(target), rows = items.slice(0, max);
+  if (kind === 'pods' && target === 'resource-table') {
+    options.bindSort = (columns, storageKey) => {
+      const sort = window.elD90Productivity.tableSort(container, storageKey);
+      if (Object.hasOwn(state, 'pendingPodSort')) {
+        const saved = state.pendingPodSort;
+        const index = columns.findIndex(([column]) => column === saved?.column);
+        sort.index = index >= 0 ? index : null;
+        sort.direction = saved?.direction === -1 ? -1 : 1;
+        delete sort.order;
+        delete state.pendingPodSort;
+      }
+      state.readPodSort = () => sort.index === null ? null : {column: columns[sort.index][0], direction: sort.direction};
+    };
+  }
   if (kind === 'pods') return window.elD90PodTable.render(container, rows, state.podTableData || {}, options);
   if (kind === 'nodes') return window.elD90NodeTable.render(container, rows, state.nodeTableData || {}, options);
   if (kind === 'customresourcedefinitions') return renderCustomDefinitions(target, items);
@@ -267,13 +281,14 @@ function filterTable({preserveScroll = false} = {}) {
     && $('resource-table').contains(document.activeElement) ? document.activeElement.closest('th').cellIndex : null;
   const scroll = preserveScroll ? scrollTargets().map(el => [el?.scrollLeft || 0, el?.scrollTop || 0]) : [];
   state.search=$('search').value;state.statusFilter=$('status-filter').value;state.labelFilter=$('label-filter').value;
-  const query = $('search').value.trim().toLowerCase();const pageKey=JSON.stringify([state.context,activeResource(),query,state.statusFilter,state.labelFilter]),table=$('resource-table'),pager=window.elD90VirtualTable.states.get(table);if(table.dataset.pageFilter!==pageKey&&pager){pager.key=pageKey;pager.page=0;}table.dataset.pageFilter=pageKey;
+  const query = $('search').value.trim().toLowerCase();const pageKey=JSON.stringify([state.context,activeResource(),query,state.statusFilter,state.labelFilter]),table=$('resource-table'),pager=window.elD90VirtualTable.states.get(table);if(table.dataset.pageFilter!==pageKey&&pager){pager.key=pageKey;pager.page=0;}table.dataset.pageFilter=pageKey;table.dataset.sortContext=workspaceKey(state.context);
   const eventView=activeResource()==='events'||activeResource()?.startsWith('events.');const items = state.items.filter(r => (eventView?window.elD90Events.matches(r,query):window.elD90WorkspaceModel.filtered(r,{query,status:$('status-filter')?.value||'',labels:$('label-filter')?.value||''})));
   $('resource-count').textContent = `${items.length} resource${items.length === 1 ? '' : 's'}${state.listPartial?' loaded · loading…':''}`; renderTable('resource-table', items, activeResource(), Infinity, preserveScroll);
   if (focusedSort !== null) table.querySelector('thead tr')?.cells[focusedSort]?.querySelector('button')?.focus({preventScroll: true});
   if (preserveScroll) scrollTargets().forEach((el, index) => el?.scrollTo(...scroll[index]));
 }
 function updatePageHeading(){
+ $('save-pods-view').hidden=state.view!=='pods';
  const cluster=state.view==='cluster',resource=activeResource(),compact=state.view!=='overview'&&!SPECIAL_VIEWS.includes(state.view),clusterScoped=cluster||window.elD90NavigationResources.some(r=>r.key===resource&&!r.namespaced)||['nodes','namespaces','persistentvolumes','storageclasses','clusterroles','clusterrolebindings','customresourcedefinitions'].includes(resource)||state.catalogue.find(item=>item.key===resource)?.namespaced===false;document.querySelector('.page-heading').classList.toggle('compact-resource-heading',compact);document.querySelector('.content').classList.toggle('compact-resource-content',compact);document.querySelector('.resource-filters').hidden=state.view==='events';
  $('eyebrow').textContent=cluster?'YOUR WHOLE CLUSTER':state.view==='overview'?'NAMESPACE OVERVIEW':'EXPLORE YOUR CLUSTER';
  $('page-description').textContent=cluster?'CPU, memory and Pod capacity across all namespaces.':state.view==='overview'?'Workload health and recent activity for the selected namespaces.':state.view==='connections'?'Connect using AWS SSO or your kubeconfig.':`Inspect ${(titles[state.view]||state.view).toLowerCase()}, view manifests, and work in context.`;
@@ -1024,8 +1039,24 @@ function renderCustomDefinitions(target,items){
 }
 window.addEventListener('eld90-appearance',()=>{const options=window.elD90Settings.terminal();for(const owner of clusterWorkspaces.values())if(owner.terminalInstance){Object.assign(owner.terminalInstance.options,options);owner.fitAddon?.fit();}for(const s of sessionUI?.all.values()||[])if(s.term){Object.assign(s.term.options,options);s.fit?.fit();}});
 
-function captureView(){return{context:state.context,demo:state.demo,namespaces:[...state.namespaces],view:state.view,dynamicResource:state.dynamicResource,search:$('search').value,statusFilter:$('status-filter').value,labelFilter:$('label-filter').value};}
-async function applySavedView(entry){if(typeof entry.demo==='boolean'&&entry.demo!==state.demo)await toggleDemo();if(!state.contexts.some(c=>c.name===entry.context))throw Error('This saved context is no longer configured');const key=workspaceKey(entry.context),owner=clusterWorkspaces.get(key)||freshWorkspace(entry.context);owner.view=Object.hasOwn(titles,entry.view)?entry.view:'pods';owner.namespaces=Array.isArray(entry.namespaces)?entry.namespaces.filter(n=>typeof n==='string'&&/^[a-z0-9][a-z0-9-]{0,62}$/.test(n)):[];owner.namespace=owner.namespaces.length===1?owner.namespaces[0]:'*';owner.search=String(entry.search||'').slice(0,500);owner.statusFilter=entry.statusFilter||'';owner.labelFilter=String(entry.labelFilter||'').slice(0,500);clusterWorkspaces.set(key,owner);if(state===owner){await closeDrawer();paintWorkspace();await refresh();}else await selectContext(entry.context);if(entry.dynamicResource&&owner.catalogue.some(r=>r.key===entry.dynamicResource)&&owner.view==='resources'){owner.dynamicResource=entry.dynamicResource;await refresh();}saveWorkspacePreferences();}
+let podsViewDraft;
+$('save-pods-view').onclick = () => {
+  podsViewDraft = captureView();
+  $('pods-view-name').value = '';
+  $('save-pods-dialog').showModal();
+};
+$('cancel-pods-save').onclick = () => $('save-pods-dialog').close();
+$('save-pods-form').onsubmit = event => {
+  event.preventDefault();
+  const name = $('pods-view-name').value.trim();
+  if (!name) { $('pods-view-name').focus(); return; }
+  try {
+    workspaceUI.saveView(podsViewDraft, name);
+    $('save-pods-dialog').close();
+  } catch (err) { error(err); }
+};
+function captureView(){return{...(state.view==='pods'?{podSort:state.readPodSort?.()??null}:{}),context:state.context,demo:state.demo,namespaces:[...state.namespaces],view:state.view,dynamicResource:state.dynamicResource,search:$('search').value,statusFilter:$('status-filter').value,labelFilter:$('label-filter').value};}
+async function applySavedView(entry){if(typeof entry.demo==='boolean'&&entry.demo!==state.demo)await toggleDemo();if(!state.contexts.some(c=>c.name===entry.context))throw Error('This saved context is no longer configured');const key=workspaceKey(entry.context),owner=clusterWorkspaces.get(key)||freshWorkspace(entry.context);owner.view=Object.hasOwn(titles,entry.view)?entry.view:'pods';if(owner.view==='pods'&&Object.hasOwn(entry,'podSort'))owner.pendingPodSort=entry.podSort;owner.namespaces=Array.isArray(entry.namespaces)?entry.namespaces.filter(n=>typeof n==='string'&&/^[a-z0-9][a-z0-9-]{0,62}$/.test(n)):[];owner.namespace=owner.namespaces.length===1?owner.namespaces[0]:'*';owner.search=String(entry.search||'').slice(0,500);owner.statusFilter=entry.statusFilter||'';owner.labelFilter=String(entry.labelFilter||'').slice(0,500);clusterWorkspaces.set(key,owner);if(state===owner){await closeDrawer();paintWorkspace();await refresh();}else await selectContext(entry.context);if(entry.dynamicResource&&owner.catalogue.some(r=>r.key===entry.dynamicResource)&&owner.view==='resources'){owner.dynamicResource=entry.dynamicResource;await refresh();}saveWorkspacePreferences();}
 workspaceUI=window.elD90WorkspaceUI.create({escape,invoke,error,state:()=>state,refresh,workspaces:()=>[...clusterWorkspaces.values()].filter(w=>w.demo===state.demo).map(w=>({context:w.context})),capture:()=>lastResourceView,applyView:applySavedView,open:async(target,tabName='summary')=>{if(typeof target.demo==='boolean'&&target.demo!==state.demo)await toggleDemo();if(!state.contexts.some(c=>c.name===target.context))throw Error('This context is no longer configured');if(state.context!==target.context)await selectContext(target.context);await openRelatedResource(state,target);if(state.selected&&tabName!=='summary')await tab(tabName);}});
 detailLogViewer=window.elD90LogViewer.attach($('logs-output'));
 

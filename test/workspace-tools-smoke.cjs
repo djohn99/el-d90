@@ -8,6 +8,30 @@ async function nav(page,view){if(['catalog','gitops','extensions','connections',
 async function namespace(page,value){await page.locator('#namespace-multi').click();for(const input of await page.locator('#namespace-options input').all())await input.setChecked((await input.getAttribute('value'))===value);await page.locator('#namespace-multi').click();await page.waitForFunction(value=>state.namespaces.length===1&&state.namespaces[0]===value&&!state.loading,value);}
 (async()=>{try{
  let page=await launch(true);await ready(page);await nav(page,'issues');await page.locator('.issue-card.critical').first().waitFor();assert.match(await page.locator('#issues-results').textContent(),/Container repeatedly exits/);await page.locator('#issues-severity').selectOption('critical');assert.equal(await page.locator('.issue-card.warning').count(),0);
+ await nav(page,'pods');const statusColumn=page.locator('#resource-table th[data-pod-column="status"]');
+ await statusColumn.getByRole('button').click();
+ await statusColumn.getByRole('button').click();
+ await nav(page,'deployments');
+ const deploymentAge=page.locator('#resource-table th[data-resource-column="age"]');
+ await deploymentAge.getByRole('button').click();
+ await nav(page,'pods');
+ assert.equal(await statusColumn.getAttribute('aria-sort'),'descending');
+ await nav(page,'deployments');
+ assert.equal(await deploymentAge.getAttribute('aria-sort'),'ascending');
+ await nav(page,'pods');
+ await page.locator('#save-pods-view').click();
+ await page.locator('#pods-view-name').fill('Pods by status');
+ await page.locator('#save-pods-form button[type=submit]').click();
+ await statusColumn.getByRole('button').click();
+ await nav(page,'saved');
+ const savedPods=page.locator('.saved-card').filter({hasText:'Pods by status'});
+ await savedPods.getByRole('button',{name:'Open',exact:true}).click();
+ await page.waitForFunction(()=>state.view==='pods'&&!state.loading);
+ assert.equal(await statusColumn.getAttribute('aria-sort'),'descending');
+ await page.evaluate(()=>refresh());
+ assert.equal(await statusColumn.getAttribute('aria-sort'),'descending');
+ await nav(page,'saved');
+ await savedPods.getByRole('button',{name:'Remove'}).click();
  await nav(page,'pods');await namespace(page,'staging');await page.locator('#search').fill('notification');await page.locator('#status-filter').selectOption('unhealthy');await page.locator('#label-filter').fill('app=notification');await page.waitForFunction(()=>document.querySelector('#resource-count').textContent==='1 resource');await page.getByRole('button',{name:'Open notification-worker-689d7cc5-y4b8k',exact:true}).click();await page.locator('#favorite-resource').click();assert.match(await page.locator('#favorite-resource').textContent(),/Saved/);await page.locator('#close-drawer').click();await nav(page,'saved');await page.locator('#saved-view-name').fill('Staging failures');await page.locator('#save-current-view').click();await page.locator('.saved-card').filter({hasText:'Staging failures'}).waitFor();assert.equal(await page.locator('.saved-card').count(),2);
  await nav(page,'pods');await page.locator('#search').fill('');await page.locator('#status-filter').selectOption('');await page.locator('#label-filter').fill('');await nav(page,'saved');await page.locator('.saved-card').filter({hasText:'Staging failures'}).getByRole('button',{name:'Open',exact:true}).click();await page.waitForFunction(()=>state.view==='pods'&&!state.loading);assert.equal(await page.locator('#search').inputValue(),'notification');assert.equal(await page.locator('#status-filter').inputValue(),'unhealthy');assert.equal(await page.locator('#label-filter').inputValue(),'app=notification');assert.equal(await page.locator('#namespace').inputValue(),'staging');
  await page.reload();await ready(page);await nav(page,'saved');assert.equal(await page.locator('.saved-card').count(),2);await page.locator('.saved-card').filter({hasText:'Pod / notification'}).getByRole('button',{name:'Open',exact:true}).click();await page.locator('[data-tab="logs"]').click();const controls=page.locator('#detail-logs .log-viewer-controls');
