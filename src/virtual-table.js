@@ -5,9 +5,16 @@ window.elD90VirtualTable={states:new WeakMap(),mount(container,options){
  const entries=options.items.map((item,index)=>({item,index}));let enhanced;
  container.innerHTML=(options.help||'')+'<div class="resource-pages"><button class="button secondary page-previous" aria-label="Previous page">Previous</button><span class="virtual-table-status" role="status"></span><button class="button secondary page-next" aria-label="Next page">Next</button><div class="resource-page-options"><label>Rows per page <select aria-label="Rows per page"><option>50</option><option>100</option><option>250</option></select></label></div></div><div class="virtual-table-scroll" tabindex="0" aria-label="Scrollable resource table"><table class="'+(options.className||'')+'"><thead><tr>'+options.headers.join('')+'</tr></thead><tbody></tbody></table></div>';
  const viewport=container.querySelector('.virtual-table-scroll'),body=container.querySelector('tbody'),status=container.querySelector('.virtual-table-status'),previousButton=container.querySelector('.page-previous'),nextButton=container.querySelector('.page-next'),size=container.querySelector('[aria-label="Rows per page"]');size.value=String(saved.size);
- function sort(){if(sortState.index===null)return;const values=new Map(entries.map(e=>[e.index,options.values(e.item)[sortState.index]??'']));entries.sort((a,b)=>String(values.get(a.index)).localeCompare(String(values.get(b.index)),undefined,{numeric:true,sensitivity:'base'})*sortState.direction);}
+ function sort(){
+   if(sortState.index===null)return;
+   const compare = options.tableOptions.rowComparators?.[sortState.index];
+   if (compare) {
+     entries.sort((a, b) => compare(a.index, b.index, sortState.direction));
+     return;
+   }
+   const values=new Map(entries.map(e=>[e.index,options.values(e.item)[sortState.index]??'']));entries.sort((a,b)=>String(values.get(a.index)).localeCompare(String(values.get(b.index)),undefined,{numeric:true,sensitivity:'base'})*sortState.direction);}
  const itemKey = ({item}) => JSON.stringify([item.metadata.namespace, item.metadata.name]);
- if (options.preserveOrder && sortState.order) {
+ if (options.preserveOrder && sortState.order && !options.tableOptions.rowComparators?.[sortState.index]) {
    const ranks = new Map(sortState.order.map((key, index) => [key, index]));
    entries.sort((a, b) => (ranks.get(itemKey(a)) ?? Infinity) - (ranks.get(itemKey(b)) ?? Infinity));
  } else sort();

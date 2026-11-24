@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.30] - 2026-11-24
+
+- Pods now sort by creation time across namespaces and pages. Refresh keeps newly discovered pods in chronological order when Age is selected.
+
 ## [0.5.29] - 2026-11-20
 
 - Use macOS-trusted company and public CA certificates automatically for AWS CLI, EKS credentials, and AWS SSO, with explicit CA bundle overrides still supported.
