@@ -31,6 +31,33 @@ await app.evaluate(({BrowserWindow},id)=>BrowserWindow.getAllWindows()[0].webCon
 await app.evaluate(()=>global.pageRequest.resolve({items:global.pagePods}));await p.waitForFunction(()=>!state.loading);assert.equal(await p.getByRole('button',{name:'Previous page',exact:true}).isDisabled(),false);await p.getByLabel('Rows per page',{exact:true}).selectOption('100');assert.equal(await p.locator('#resource-table tbody tr').count(),100);await p.getByRole('button',{name:'Next page',exact:true}).click();assert.equal(await p.locator('#resource-table tbody tr').count(),20);assert.equal(await p.getByRole('button',{name:'Next page',exact:true}).isDisabled(),true);
 await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();await p.locator('#resource-table').getByRole('button',{name:'Namespace ↕',exact:true}).click();await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();assert.equal(await p.locator('#resource-table th[data-pod-column=name]').getAttribute('aria-sort'),'ascending');await p.evaluate(()=>filterTable());await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();assert.equal(await p.locator('#resource-table th[data-pod-column=name]').getAttribute('aria-sort'),'descending');await p.locator('tr[aria-label="Open page-pod-119"]').waitFor();
 await p.locator('#search').fill('page-pod-119');await p.locator('tr[aria-label="Open page-pod-119"]').waitFor();await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===1);await p.locator('#search').fill('');await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===100);await p.locator('tr[aria-label="Open page-pod-000"]').waitFor();await p.locator('#search').fill('page-pod-119');await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===1);await p.locator('tr[aria-label="Open page-pod-119"]').click();await p.waitForFunction(()=>state.selected.metadata.namespace==='prod');console.log('PASS: resource first paint before final API response, page size/boundaries, page retention, global search, exact Pod namespace and stale progress isolation');
+for (const count of [4, 52]) {
+  const result = await p.evaluate(count => {
+    const host = document.createElement('div');
+    host.id = 'pod-age-fixture';
+    document.body.append(host);
+    const pod = i => ({
+      kind: 'Pod', metadata: {name: 'pod-'+i, namespace: i%2 ? 'a' : 'b',
+        creationTimestamp: new Date(Date.now() - i*12*3600000).toISOString()},
+      status: {phase: i%2 ? 'Succeeded' : 'Running'}
+    });
+    const rows = Array.from({length:count}, (_, i) => pod(i)).reverse();
+    const first = () => host.querySelector('tbody tr').getAttribute('aria-label');
+    const toggle = () => host.querySelector('th[data-pod-column=age] button').click();
+    try {
+      renderTable(host.id, rows, 'pods');
+      toggle();
+      const youngest = first();
+      toggle();
+      const oldest = first();
+      renderTable(host.id, [...rows, pod(count)], 'pods', Infinity, true);
+      return [youngest, oldest, first()];
+    } finally {
+      host.remove();
+    }
+  }, count);
+  assert.deepEqual(result, ['Open pod-0', 'Open pod-'+(count-1), 'Open pod-'+count]);
+}
 const ordering = await p.evaluate(() => {
   const host = document.createElement('div');
   host.id = 'sort-regression-fixture';

@@ -8,6 +8,15 @@
  const menu=createRowActions(opts);
  const rowHTML=(pod,i)=>{const values=cells(pod,extras),health=opts.health(pod);for(const [key,,,path]of extensionColumns)values[key]=opts.extensionField?.(pod,path)??'—';values.status=health.label;return `<tr role="button" tabindex="0" aria-label="Open ${esc(values.name)}" data-index="${i}">${displayColumns.map(([key])=>`<td data-pod-column="${key}" title="${esc(key==='containers'?(pod.spec?.containers||[]).map(c=>c.name).join(', '):values[key]??'')}">${key==='containers'?containerHTML(pod,values.containers,esc):key==='actions'?(opts.onAction?menu.markup(pod,i):'<span class="table-action">↗</span>'):key==='status'?`<span class="pill ${health.tone}">${esc(values.status)}</span>`:esc(key==='age'?opts.age(values.age):values[key])}</td>`).join('')}</tr>`;};
  const tableOptions={storageKey:'pods-v2'+(extensionColumns.length?':ext:'+extensionColumns.map(c=>c[0]).join('|'):''),defaultVisible:displayColumns.map(c=>c[2]),lockedColumns:opts.onAction?[0,displayColumns.length-1]:[0],pickerLabel:'Choose Pod columns',onExport:opts.onExport};
+ const ageColumn = displayColumns.findIndex(([key]) => key === 'age');
+ const created = pods.map(pod => Date.parse(pod.metadata?.creationTimestamp));
+ tableOptions.rowComparators = {
+   [ageColumn](left, right, direction) {
+     const a = created[left], b = created[right];
+     if (Number.isNaN(a) || Number.isNaN(b)) return Number.isNaN(a) - Number.isNaN(b);
+     return (b - a) * direction;
+   }
+ };
  const metricHelp = 'Metrics API usage summed across reported containers. Unavailable means no sample or insufficient permission.';
  const headers = displayColumns.map(([key, label]) => {
    const help = key === 'cpu' || key === 'memory' ? ` title="${metricHelp}"` : '';

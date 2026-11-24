@@ -77,10 +77,14 @@
       const {index, direction, order} = sortState;
       if (index === null) return;
       const rows = [...body.rows];
-      const rank = preserveOrder && order && opts.rowKey ? new Map(order.map((key, i) => [key, i])) : null;
-      rows.sort((a, b) => rank
-        ? (rank.get(opts.rowKey(a)) ?? Infinity) - (rank.get(opts.rowKey(b)) ?? Infinity)
-        : cellValue(a.cells[index]).localeCompare(cellValue(b.cells[index]), undefined, {numeric:true,sensitivity:'base'}) * direction);
+      const compare = opts.rowComparators?.[index];
+      if (compare) rows.sort((a, b) => compare(Number(a.dataset.index), Number(b.dataset.index), direction));
+      else {
+        const rank = preserveOrder && order && opts.rowKey ? new Map(order.map((key, i) => [key, i])) : null;
+        rows.sort((a, b) => rank
+          ? (rank.get(opts.rowKey(a)) ?? Infinity) - (rank.get(opts.rowKey(b)) ?? Infinity)
+          : cellValue(a.cells[index]).localeCompare(cellValue(b.cells[index]), undefined, {numeric:true,sensitivity:'base'}) * direction);
+      }
       rows.forEach(row => body.append(row));
       if (opts.rowKey) sortState.order = rows.map(opts.rowKey);
       markSort();
