@@ -48,6 +48,13 @@ jobs:
         with:
           source: ./docs
           destination: ./_site
+      - name: Write the published download version
+        if: steps.release.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          printf '%s\n' "$RELEASE_TAG" > _site/download-version.txt
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         if: steps.release.outputs.publish == 'true'
         with:
