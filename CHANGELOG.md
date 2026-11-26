@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.34] - 2026-11-26
+
+- In an open log tab, choose 300, 1,000, 5,000, or 10,000 lines per container. The same tab reloads the history and resumes streaming with your filters in place.
+
 ## [0.5.32] - 2026-11-24
 
 - Save a named view directly from the Pods table. Reopening it restores the selected namespaces, filters, sort column and direction.
