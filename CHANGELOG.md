@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.35] - 2026-11-26
+
+- EL-D90 opens at the available size of the display under the pointer. Move the window between a laptop and an external monitor and it fits the destination work area.
+
 ## [0.5.34] - 2026-11-26
 
 - In an open log tab, choose 300, 1,000, 5,000, or 10,000 lines per container. The same tab reloads the history and resumes streaming with your filters in place.
