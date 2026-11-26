@@ -4,8 +4,8 @@ const MAX_BUFFER=1024*1024;
 class Sessions{
  constructor(options={}){this.options=options;this.entries=new Map();}
  _reserve(input,type,transport){const context=kube.string(input.context,'context');if(this.entries.size>=64||[...this.entries.values()].filter(e=>e.context===context).length>=16)throw Error('Close a session first (16 per cluster, 64 total)');const entry={id:randomUUID(),context,namespace:input.namespace||'',type,transport,resource:input.resource||'',name:input.name||'',state:'starting',buffer:'',seq:0,createdAt:new Date().toISOString(),closed:false};this.entries.set(entry.id,entry);return entry;}
- _public(e){return{id:e.id,context:e.context,namespace:e.namespace,type:e.type,transport:e.transport,resource:e.resource,name:e.name,state:e.state,createdAt:e.createdAt,shell:e.shell||null,cwd:e.cwd||null};}
- _send(e,data='',ended=false){if(this.entries.get(e.id)!==e)return;e.buffer=(e.type==='logs'?require('./log-model.js').retain(e.buffer+String(data)):(e.buffer+String(data)).slice(-MAX_BUFFER));const message={...this._public(e),data:String(data),seq:++e.seq,ended};try{this.options.onData?.(message);}catch{}}
+ _public(e){return{id:e.id,context:e.context,namespace:e.namespace,type:e.type,transport:e.transport,resource:e.resource,name:e.name,state:e.state,createdAt:e.createdAt,shell:e.shell||null,cwd:e.cwd||null,...(e.type==='logs'?{tailLines:e.logInput?.tailLines??300}:{})};}
+ _send(e,data='',ended=false){if(this.entries.get(e.id)!==e)return;e.buffer=(e.type==='logs'?require('./log-model.js').retain(e.buffer+String(data)):(e.buffer+String(data)).slice(-MAX_BUFFER));const message={...this._public(e),reset:!!e.resetPending,data:String(data),seq:++e.seq,ended};e.resetPending=false;try{this.options.onData?.(message);}catch{}}
  _finish(e,message,state='ended'){if(e.closed)return e.finished;e.closed=true;e.state=state;this._send(e,message,true);e.finished=Promise.resolve().then(()=>e.cleanup?.()).catch(error=>{e.state='error';this._send(e,'\r\nSession cleanup failed: '+error.message+'\r\n',true);});return e.finished;}
  _spawn(e,command,args,options={}){
   if(e.closed)throw Error('Session was cancelled');
@@ -20,10 +20,24 @@ class Sessions{
   if(transport==='pod'){const args=kube.terminalArgs(input),e=this._reserve(input,'terminal','pod');try{return this._spawn(e,kube.executable(),args);}catch(error){this.entries.delete(e.id);throw error;}}
   const e=this._reserve(input,'terminal','local');try{e.preparing=(this.options.prepare||clusterTerminal.prepare)(input,{base:this.options.directory});const prepared=await e.preparing;e.cleanup=prepared.cleanup;if(e.closed||this.entries.get(e.id)!==e){await prepared.cleanup();throw Error('Session was cancelled');}e.namespace=prepared.namespace;e.shell=prepared.command;e.cwd=prepared.cwd;return this._spawn(e,prepared.command,prepared.args,prepared);}catch(error){await e.cleanup?.();this.entries.delete(e.id);throw error;}
  }
- logs(input){if(!['pods','deployments'].includes(input.resource)&&!kube.directlyLoggedWorkloads.has(input.resource))throw Error('Choose a Pod or workload for logs');kube.string(input.context,'context');kube.name(input.namespace,'namespace');if(input.namespace==='*')throw Error('Choose one log namespace');kube.name(input.name);const e=this._reserve(input,'logs',input.resource==='pods'?'pod':input.resource==='deployments'?'deployment':'workload');try{
+ logs(input){if(!['pods','deployments'].includes(input.resource)&&!kube.directlyLoggedWorkloads.has(input.resource))throw Error('Choose a Pod or workload for logs');kube.string(input.context,'context');kube.name(input.namespace,'namespace');if(input.namespace==='*')throw Error('Choose one log namespace');kube.name(input.name);const e=this._reserve(input,'logs',input.resource==='pods'?'pod':input.resource==='deployments'?'deployment':'workload');try{return this._startLogs(e,input);}catch(error){this.entries.delete(e.id);throw error;}}
+ reloadLogs({id,tailLines}){
+  const old=this.entries.get(id);
+  if(old?.type!=='logs')throw Error('Log session is closed');
+  kube.logTailArg(tailLines);
+  const next={...old,child:null,controller:null,closed:false,finished:null,buffer:'',resetPending:true};
+  this.entries.set(id,next);
+  try { this._startLogs(next,{...old.logInput,tailLines}); }
+  catch(error){this.entries.set(id,old);throw error;}
+  if(old.controller)old.controller.stop();
+  else if(!old.closed)old.child?.kill();
+  return {id};
+ }
+ _startLogs(e,input){
+  e.logInput={...input};
   if(input.resource==='deployments'){e.controller=(this.options.deploymentLogs||deploymentLogs).start({...input,follow:true},{onData:data=>{if(!e.closed)this._send(e,data);},onEnd:error=>this._finish(e,'\n[Log session ended'+(error?': '+error.message:'')+']\n',error?'error':'ended')});e.state='running';this._send(e);return{id:e.id};}
   const args=kube.logArgs({...input,follow:true}),child=(this.options.spawn||spawn)(kube.executable(),args,{shell:false,detached:true,env:kube.environment(),stdio:['ignore','pipe','pipe']});e.child=child;e.state='running';child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');for(const out of [child.stdout,child.stderr])out.on('data',data=>{if(!e.closed)this._send(e,data);});child.on('error',error=>this._finish(e,error.message,'error'));child.on('close',code=>this._finish(e,'\n[Log session ended'+(code?', exit '+code:'')+']\n',code?'error':'ended'));this._send(e);return{id:e.id};
- }catch(error){this.entries.delete(e.id);throw error;}}
+ }
  list(context){if(context)kube.string(context,'context');return[...this.entries.values()].filter(e=>!context||e.context===context).map(e=>this._public(e));}
  snapshot(id){const e=this.entries.get(id);if(!e)throw Error('Session is closed');return{...this._public(e),buffer:e.buffer,seq:e.seq};}
  write(input){const e=this.entries.get(input.id);if(!e||e.closed||e.type!=='terminal'||!e.child)return false;if(typeof input.data!=='string'||Buffer.byteLength(input.data)>65536)throw Error('Terminal input exceeds 64 KB');return e.child.stdin.write(input.data);}

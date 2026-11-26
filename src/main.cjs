@@ -332,6 +332,7 @@ handle('file:open-yaml',async()=>{const result=await dialog.showOpenDialog(windo
 handle('resource:events',resourceEvents.forResource);
 
 handle('session:terminal-start',input=>sessions.terminal(input));
+handle('session:logs-reload',input=>sessions.reloadLogs(input));
 handle('session:logs-start',input=>sessions.logs(input));
 handle('session:list',input=>sessions.list(input.context));
 handle('session:snapshot',input=>sessions.snapshot(input.id));
