@@ -354,7 +354,9 @@ async function openDetail(object, kind, restoring = false) {
   $('apply-yaml').disabled = $('validate-yaml').disabled = kind === 'helm'; $('yaml-editor').readOnly = kind === 'helm'; $('forward-result').textContent = ''; $('forward-remote').value = String(object.spec?.ports?.[0]?.port || object.spec?.containers?.[0]?.ports?.[0]?.containerPort || 80);
   for(const [name,applicable]of Object.entries({logs:['pods','deployments'].includes(kind),terminal:['pods','nodes'].includes(kind),forward:['pods','services'].includes(kind),events:!!object.metadata.uid&&kind!=='helm'}))document.querySelector('[data-tab="'+name+'"]').classList.toggle('hidden',!applicable);
   $('open-terminal-session').classList.toggle('hidden',kind!=='pods');
-  $('logs-scope').textContent=kind==='deployments'?'All replica pods · pod/container prefixes · new replicas followed · initial 10,000 lines per pod':'Pod container logs · initial 10,000 lines';
+  if (!restoring) state.logTailLines = 300;
+  $('log-lines').value = String(state.logTailLines || 300);
+  $('logs-scope').textContent=kind==='deployments'?'All replica pods · pod/container prefixes · new replicas followed':'Pod container logs';
   if(object.kind==='Event'){const ev=window.elD90Events.normalize(object);$('detail-summary').innerHTML='<dl>'+Object.entries(ev).map(([k,v])=>`<dt>${escape(k)}</dt><dd class="event-message">${escape(v)}</dd>`).join('')+'</dl>';}
   addResourceActions(object, kind); if(kind!=='helm')addManagementActions(object,kind);if(kind==='nodes'){const owner=state,epoch=state.detailGeneration;window.elD90NodePods.render($('detail-summary'),{node:object,context:owner.context,demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.detailGeneration===epoch,onOpen:pod=>openDetail(pod,'pods')});window.elD90Nodes.render($('detail-node-access'),{node:object,context:owner.context,namespace:owner.namespaces.length===1?owner.namespaces[0]:'',demo:owner.demo,invoke,isCurrent:()=>state===owner&&state.detailGeneration===epoch,onSession:result=>acceptNodeSession(owner,object,result,epoch)});}
   const dismissed=dismissedDrafts.get(draftKey());if(dismissed)state.originalYaml=dismissed.original;$('yaml-editor').value = restoring ? state.yamlDraft || '' : dismissed?.yaml??''; $('yaml-result').textContent = ''; detailLogViewer?.reset(restoring?state.logText||'':''); hidden('drawer', false); await tab(restoring ? state.savedTab || 'summary' : 'summary', restoring);workspaceUI?.detail(object,kind).catch(error);paintExtensionDetails(object,kind);attachResourceData(object,kind);richEditor?.sync();resourceForms?.sync();
@@ -375,7 +377,8 @@ async function tab(value, restoring = false) {if(value!=='summary')window.elD90S
   if (value === 'terminal') {const node=state.selectedKind==='nodes';$('terminal-container').classList.toggle('hidden',node);$('terminal-shell').classList.toggle('hidden',node);hidden('node-shell-options',!node);$('connect-terminal').textContent=state.terminal?'Reconnect':node?'Open node shell':'Retry connection';document.querySelector('#detail-terminal .terminal-hint').textContent=node?'Node shell through Kubernetes. No SSH configuration required. Closing the terminal cleans up its temporary Pod.':'Interactive shell in this pod. Commands use the pod permissions.';initTerminal();if(!restoring&&!state.terminal)await connectTerminal({automatic:true});}
 }
 async function startLogs() {
-  const owner = state; const request={...detailInput(),container:$('log-container').value,previous:$('previous-logs').checked};
+  const owner = state; const request={...detailInput(),container:$('log-container').value,tailLines:Number($('log-lines').value),previous:$('previous-logs').checked};
+  owner.logTailLines = request.tailLines;
   const generation = ++state.streamGeneration;
   if (state.logs) { const id = state.logs; state.logs = null; await invoke('stream:stop', { id }).catch(() => {}); }
   detailLogViewer?.reset(); owner.logText='';
@@ -533,7 +536,7 @@ $('demo-toggle').onclick = toggleDemo;
 $('close-drawer').onclick = closeDrawer;
 document.querySelector('.detail-tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (b && !b.disabled) tab(b.dataset.tab); };
 $('new-yaml').onclick = () => createResource(); $('validate-yaml').onclick = () => editYaml(false); $('apply-yaml').onclick = () => editYaml(true);
-$('restart-logs').onclick = $('log-container').onchange = $('previous-logs').onchange = startLogs;
+$('log-lines').onchange = $('restart-logs').onclick = $('log-container').onchange = $('previous-logs').onchange = startLogs;
 $('save-logs').onclick = () => invoke('file:save', { text: detailLogViewer?.getText()||'' }).catch(error);
 $('connect-terminal').onclick = ()=>connectTerminal({force:true});
 for(const id of ['terminal-container','terminal-shell'])$(id).onchange=()=>{if(state.tab==='terminal')connectTerminal({force:true});};
@@ -1014,7 +1017,7 @@ function renderEventsTable(target,items,max=Infinity,preserveOrder=false){
 async function loadResourceEvents(){const owner=state,object=owner.selected,epoch=owner.detailGeneration;const container=$('detail-events');container.innerHTML='<p>Loading events for this resource…</p>';try{if(!object?.metadata?.uid)throw Error('This resource has no UID for event lookup');const result=owner.demo?{items:[]}:await invoke('resource:events',{context:owner.context,namespace:object.metadata.namespace||'*',uid:object.metadata.uid});if(state!==owner||epoch!==owner.detailGeneration)return;container.innerHTML='<p>Events for this exact resource UID. Related Pods and ReplicaSets have their own events.</p><button id="refresh-resource-events" class="button secondary">Refresh events</button><div id="resource-events-table"></div>';renderEventsTable('resource-events-table',result.items||[]);$('refresh-resource-events').onclick=loadResourceEvents;}catch(e){if(state===owner&&epoch===owner.detailGeneration)container.textContent='Events unavailable: '+e.message;}}
 
 sessionUI=window.elD90Sessions.create({invoke,subscribe:callback=>window.eld90.onSession(callback),context:()=>state});
-$('open-log-session').onclick=async()=>{try{const request={...detailInput(),container:$('log-container').value,previous:$('previous-logs').checked};await sessionUI.openLogs(request);await closeDrawer();sessionUI.show();}catch(e){error(e);}};
+$('open-log-session').onclick=async()=>{try{const request={...detailInput(),container:$('log-container').value,tailLines:Number($('log-lines').value),previous:$('previous-logs').checked};await sessionUI.openLogs(request);await closeDrawer();sessionUI.show();}catch(e){error(e);}};
 $('open-terminal-session').onclick=async()=>{try{const request={...detailInput(),container:$('terminal-container').value,shell:$('terminal-shell').value};await sessionUI.openTerminal(request);await closeDrawer();sessionUI.show();}catch(e){error(e);}};
 
 function browseCustomResource(key) {

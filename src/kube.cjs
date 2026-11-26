@@ -153,10 +153,14 @@ async function apply(input, dryRun) {
   return run(args, { input: input.yaml });
 }
 const directlyLoggedWorkloads = new Set(['statefulsets', 'daemonsets', 'replicasets', 'replicationcontrollers', 'jobs']);
+function logTailArg(lines = 300) {
+  if (![300, 1000, 5000, 10000].includes(lines)) throw new Error('Invalid initial log line count');
+  return '--tail=' + lines;
+}
 function logArgs(input) {
   const workload = directlyLoggedWorkloads.has(input.resource);
   const target = name(input.name);
-  const args = ['logs', workload ? `${input.resource}/${target}` : target, ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0', '--tail=10000', '--timestamps=true'];
+  const args = ['logs', workload ? `${input.resource}/${target}` : target, ...scope(input, 'pods', true).filter(arg => !arg.startsWith('--request-timeout=')), '--request-timeout=0', logTailArg(input.tailLines), '--timestamps=true'];
   if (workload) args.push('--all-pods=true', '--prefix=true', '--max-log-requests=20');
   if (input.container) args.push('--container', name(input.container, 'container'));
   if (input.previous) args.push('--previous');
@@ -248,4 +252,4 @@ function forwardArgs(input) {
   for (const port of [input.localPort, input.remotePort]) if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Ports must be integers between 1 and 65535');
   return ['port-forward', input.resource + '/' + name(input.name), input.localPort + ':' + input.remotePort, ...scope(input, input.resource, true).filter(arg => !arg.startsWith('--request-timeout=')), '--address=127.0.0.1'];
 }
-module.exports = { api, pagedList, listPath, setKubeconfigPaths, RESOURCES, string, name, resource, scope, environment, executable, run, contexts, list, yaml, apply, logArgs, terminalArgs, directlyLoggedWorkloads, parseDiscovery, discover, metrics, helmList, helmManifest, actionArgs, forwardArgs, selectedNamespaces, findHelm };
+module.exports = { api, pagedList, listPath, setKubeconfigPaths, RESOURCES, string, name, resource, scope, environment, executable, run, contexts, list, yaml, apply, logTailArg, logArgs, terminalArgs, directlyLoggedWorkloads, parseDiscovery, discover, metrics, helmList, helmManifest, actionArgs, forwardArgs, selectedNamespaces, findHelm };

@@ -62,6 +62,7 @@ function start(input, options = {}) {
   if (typeof input.previous !== 'undefined' && typeof input.previous !== 'boolean') throw new Error('Invalid previous-log selection');
   if (!input.previous && input.follow !== true) throw new Error('Deployment log aggregation requires follow=true');
   const previous = !!input.previous;
+  const initialTail = kube.logTailArg(input.tailLines);
   const spawn = options.spawn || nodeSpawn, kill = options.kill || defaultKill;
   const reads = new Set();
   const pollMs = options.pollMs === undefined ? 5000 : Math.max(10, Math.min(60000, Number(options.pollMs) || 5000));
@@ -124,7 +125,7 @@ function start(input, options = {}) {
     const args = ['logs', podName, '--context', context, '--namespace', namespace, '--request-timeout=0', '--timestamps=true', '--prefix=true'];
     if (container === '*') args.push('--all-containers=true', '--max-log-requests=100'); else args.push('--container', container);
     if (previous) args.push('--previous'); else args.push('--follow');
-    if (record.lastTimestamp && !previous) args.push('--since-time=' + record.lastTimestamp); else args.push('--tail=10000');
+    if (record.lastTimestamp && !previous) args.push('--since-time=' + record.lastTimestamp); else args.push(initialTail);
     emit(`[${podName}] Attaching ${previous ? 'previous-container snapshot' : 'log stream'}${container === '*' ? ' · all containers' : ` · ${container}`}\n`);
     let child;
     try {

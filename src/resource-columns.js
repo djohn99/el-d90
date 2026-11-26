@@ -1,5 +1,5 @@
 // Resource-specific table fields. Never include Secret or ConfigMap values.
-(function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./navigation-resources.js'):root.elD90NavigationResources,typeof module==='object'&&module.exports?require('cronstrue'):root.cronstrue,typeof module==='object'&&module.exports?require('./resource-row-actions.js'):root.elD90RowActions);if(typeof module==='object'&&module.exports)module.exports=api;else root.elD90Columns=api;})(typeof window!=='undefined'?window:globalThis,function(extraResources,cronstrue,createRowActions){
+(function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./navigation-resources.js'):root.elD90NavigationResources,typeof module==='object'&&module.exports?require('cronstrue'):root.cronstrue,typeof module==='object'&&module.exports?require('./resource-row-actions.js'):root.elD90RowActions,typeof module==='object'&&module.exports?require('./node-table-ui.js').quantity:root.elD90NodeTable.quantity);if(typeof module==='object'&&module.exports)module.exports=api;else root.elD90Columns=api;})(typeof window!=='undefined'?window:globalThis,function(extraResources,cronstrue,createRowActions,quantity){
  const field=(key,label,read,visible=true)=>({key,label,read,visible}),at=path=>r=>path.split('.').reduce((o,k)=>o?.[k],r),f=(label,path,visible=true)=>field(path,label,at(path),visible),join=(items,fn)=>items?.map(fn).filter(v=>v!==undefined&&v!=='').join(', ')||'—',map=value=>Object.entries(value||{}).map(([k,v])=>k+'='+v).join(', ')||'—',images=r=>join(r.spec?.template?.spec?.containers,c=>c.image),selector=r=>map(r.spec?.selector?.matchLabels||r.spec?.selector),ports=items=>join(items,p=>(p.name?p.name+': ':'')+(p.port??'—')+'/'+(p.protocol||'TCP')+(p.nodePort?' → '+p.nodePort:'')),rules=r=>join(r.rules,x=>(x.verbs||[]).join('/')+' '+(x.resources||x.nonResourceURLs||[]).join('/')),subjects=r=>join(r.subjects,x=>x.kind+':'+(x.namespace?x.namespace+'/':'')+x.name),labels=field('labels','Labels',r=>map(r.metadata?.labels),false),sel=field('selector','Selector',selector,false),imgs=field('images','Images',images);
  function describeSchedule(expression) {
    if (typeof expression !== 'string' || !expression.trim()) return expression;
@@ -38,10 +38,34 @@
  };
  const cluster=new Set([...extraResources.filter(r=>!r.namespaced).map(r=>r.key),'nodes','namespaces','persistentvolumes','storageclasses','clusterroles','clusterrolebindings','customresourcedefinitions']);
  function columns(kind,items=[]){const columns=[field('name','Name',at('metadata.name'))];if(!cluster.has(kind)&&items.some(r=>r.metadata?.namespace))columns.push(field('namespace','Namespace',at('metadata.namespace')));const fields=profiles[kind]|| (kind==='cronjobs.batch'?profiles.cronjobs:null)||[f('Kind','kind'),f('API Version','apiVersion'),...(items.some(r=>r.status?.phase)?[f('Phase','status.phase')]:[]),...(items.some(r=>r.status?.conditions)?[field('conditions','Conditions',r=>join(r.status?.conditions,c=>c.type+'='+c.status))]:[])];if(['deployments','statefulsets','daemonsets','replicasets','replicationcontrollers','jobs','cronjobs','persistentvolumeclaims','persistentvolumes','helm'].includes(kind))columns.push(field('status','Status',null));columns.push(...fields,labels,field('age','Age',at('metadata.creationTimestamp')),field('actions','Actions',()=>''));return columns.filter((c,i,a)=>a.findIndex(x=>x.key===c.key)===i);}
+ function resourceComparators(fields, items, health) {
+   const comparators = {};
+   const identity = (a, b) => (items[a].metadata.namespace || '').localeCompare(items[b].metadata.namespace || '') ||
+     items[a].metadata.name.localeCompare(items[b].metadata.name);
+   function numeric(values, a, b, direction) {
+     const missingA = !Number.isFinite(values[a]), missingB = !Number.isFinite(values[b]);
+     return Number(missingA) - Number(missingB) || (values[a] - values[b]) * direction || identity(a, b);
+   }
+   const timestamps = items.map(item => Date.parse(item.metadata.creationTimestamp));
+   const age = (a, b, direction) => numeric(timestamps, a, b, -direction);
+   const storage = ['spec.resources.requests.storage', 'status.capacity.storage', 'spec.capacity.storage'];
+   fields.forEach((field, index) => {
+     if (field.key === 'age') comparators[index] = age;
+     if (field.key === 'status') {
+       const statuses = items.map(item => health(item).label);
+       comparators[index] = (a, b, direction) => statuses[a].localeCompare(statuses[b]) * direction || age(a, b, 1);
+     }
+     if (storage.includes(field.key)) {
+       const quantities = items.map(item => quantity(field.read(item)));
+       comparators[index] = (a, b, direction) => numeric(quantities, a, b, direction);
+     }
+   });
+   return comparators;
+ }
  function render(container,items,kind,opts){if(!items.length){container.innerHTML='<div class="empty">No resources in this view.</div>';return;}const fields=columns(kind,items),esc=opts.escape,extensionColumns=kind.split('.')[0]==='secrets'?[]:(opts.extraColumns||[]).slice(0,20).map(c=>field('extension:'+c.extensionId+':'+c.id,c.title,r=>opts.extensionField?.(r,c.path)??'—'));fields.splice(Math.max(1,fields.length-2),0,...extensionColumns);
  const menu=createRowActions(opts);
  const rowHTML=(r,i)=>`<tr role="button" tabindex="0" data-index="${i}" aria-label="Open ${esc(r.metadata.name)}">${fields.map(c=>{const value=c.key==='status'?opts.health(r).label:c.read(r),text=value===undefined||value===null?'—':String(value);const formatted=c.format?.(value)??text;const dataValue=c.format?` data-value="${esc(text)}"`:'';return `<td data-resource-column="${esc(c.key)}" title="${esc(formatted===text?text:formatted+' · '+text)}"${dataValue}>${c.key==='age'?esc(opts.age(value)):c.key==='actions'?(opts.onAction?menu.markup(r,i):'<span class="table-action">↗</span>'):esc(formatted)}</td>`;}).join('')}</tr>`;
- const headers=fields.map(c=>`<th data-resource-column="${esc(c.key)}">${esc(c.label)}</th>`),help=kind==='deployments'?'<p class="node-table-help">CPU and memory sum current samples from selector-matched, non-terminated Pods in each deployment namespace. Incomplete sample coverage shows Unavailable.</p>':'',tableOptions={storageKey:'resource-v3:'+kind+(extensionColumns.length?':ext:'+extensionColumns.map(c=>c.key).join('|'):''),defaultVisible:fields.map(c=>c.visible),lockedColumns:opts.onAction?[0,fields.length-1]:[0],pickerLabel:'Choose '+kind+' columns',onExport:opts.onExport};
+ const headers=fields.map(c=>`<th data-resource-column="${esc(c.key)}">${esc(c.label)}</th>`),help=kind==='deployments'?'<p class="node-table-help">CPU and memory sum current samples from selector-matched, non-terminated Pods in each deployment namespace. Incomplete sample coverage shows Unavailable.</p>':'',tableOptions={rowComparators:resourceComparators(fields,items,opts.health),storageKey:'resource-v3:'+kind+(extensionColumns.length?':ext:'+extensionColumns.map(c=>c.key).join('|'):''),defaultVisible:fields.map(c=>c.visible),lockedColumns:opts.onAction?[0,fields.length-1]:[0],pickerLabel:'Choose '+kind+' columns',onExport:opts.onExport};
  if(items.length>50&&typeof window!=='undefined'&&window.elD90VirtualTable)return window.elD90VirtualTable.mount(container,{items,headers,help,row:rowHTML,values:r=>fields.map(c=>c.key==='age'?opts.age(c.read(r)):c.key==='status'?opts.health(r).label:c.read(r)??''),open:menu.open,enhance:menu.enhance,preserveOrder:opts.preserveOrder,tableOptions});
  container.innerHTML=help+'<table><thead><tr>'+headers.join('')+'</tr></thead><tbody>'+items.map(rowHTML).join('')+'</tbody></table>';container.querySelectorAll('tbody tr').forEach(row=>{row.onclick=event=>menu.open(items[Number(row.dataset.index)],event);row.onkeydown=e=>{if(e.target===row && e.key==='Enter')row.click();};});menu.enhance(container,tableOptions);
  }

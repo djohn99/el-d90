@@ -32,6 +32,32 @@ await app.evaluate(()=>global.pageRequest.resolve({items:global.pagePods}));awai
 await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();await p.locator('#resource-table').getByRole('button',{name:'Namespace ↕',exact:true}).click();await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();assert.equal(await p.locator('#resource-table th[data-pod-column=name]').getAttribute('aria-sort'),'ascending');await p.evaluate(()=>filterTable());await p.locator('#resource-table').getByRole('button',{name:'Name ↕',exact:true}).click();assert.equal(await p.locator('#resource-table th[data-pod-column=name]').getAttribute('aria-sort'),'descending');await p.locator('tr[aria-label="Open page-pod-119"]').waitFor();
 await p.locator('#search').fill('page-pod-119');await p.locator('tr[aria-label="Open page-pod-119"]').waitFor();await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===1);await p.locator('#search').fill('');await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===100);await p.locator('tr[aria-label="Open page-pod-000"]').waitFor();await p.locator('#search').fill('page-pod-119');await p.waitForFunction(()=>document.querySelectorAll('#resource-table tbody tr').length===1);await p.locator('tr[aria-label="Open page-pod-119"]').click();await p.waitForFunction(()=>state.selected.metadata.namespace==='prod');console.log('PASS: resource first paint before final API response, page size/boundaries, page retention, global search, exact Pod namespace and stale progress isolation');
 for (const count of [4, 52]) {
+  const firstNodes = await p.evaluate(count => {
+    const host = document.createElement('div');
+    host.id = 'node-sort-fixture';
+    document.body.append(host);
+    const nodes = Array.from({length: count}, (_, i) => ({
+      kind: 'Node', metadata: {name: 'node-'+i, creationTimestamp: new Date(Date.now()-i*3600000).toISOString()},
+      status: {conditions: [{type: 'Ready', status: i % 2 ? 'False' : 'True'}]}
+    }));
+    const toggle = key => host.querySelector('th[data-node-column="'+key+'"] button').click();
+    const first = () => host.querySelector('tbody tr').getAttribute('aria-label');
+    try {
+      renderTable(host.id, [...nodes].reverse(), 'nodes');
+      toggle('age');
+      const youngest = first();
+      toggle('age');
+      const oldest = first();
+      toggle('status');
+      const notReady = first();
+      toggle('status');
+      renderTable(host.id, nodes, 'nodes', Infinity, true);
+      return [youngest, oldest, notReady, first()];
+    } finally { host.remove(); }
+  }, count);
+  assert.deepEqual(firstNodes, ['Open node-0', 'Open node-'+(count-1), 'Open node-1', 'Open node-0']);
+}
+for (const count of [4, 52]) {
   const result = await p.evaluate(count => {
     const host = document.createElement('div');
     host.id = 'pod-age-fixture';
@@ -99,6 +125,38 @@ for (const count of [4, 52]) {
     assert.deepEqual(result.after, result.before);
     assert.deepEqual(result.labels, descending ? expected.reverse() : expected);
   }
+}
+for (const count of [50, 51]) {
+  const result = await p.evaluate(count => {
+    const host = document.createElement('div');
+    host.id = 'volume-sort-' + count;
+    document.body.append(host);
+    try {
+      const items = Array.from({length: count}, (_, index) => ({
+        kind: 'PersistentVolumeClaim',
+        metadata: {name: 'claim-' + index, namespace: 'demo',
+          creationTimestamp: new Date(Date.now() - (count - index) * 3600000).toISOString()},
+        spec: {resources: {requests: {storage: index === 0 ? '1Ti' : '900Gi'}}},
+        status: {phase: 'Bound'}
+      }));
+      const first = () => host.querySelector('tbody tr').getAttribute('aria-label');
+      const click = key => host.querySelector('th[data-resource-column="' + key + '"] button').click();
+      renderTable(host.id, items, 'persistentvolumeclaims');
+      click('age');
+      const age = first();
+      click('status');
+      renderTable(host.id, items.slice().reverse(), 'persistentvolumeclaims', Infinity, true);
+      const status = first();
+      click('spec.resources.requests.storage');
+      const smaller = first();
+      click('spec.resources.requests.storage');
+      return {age, status, smaller, larger: first()};
+    } finally { host.remove(); }
+  }, count);
+  assert.equal(result.age, 'Open claim-' + (count - 1));
+  assert.equal(result.status, result.age);
+  assert.notEqual(result.smaller, 'Open claim-0');
+  assert.equal(result.larger, 'Open claim-0');
 }
 const ordering = await p.evaluate(() => {
   const host = document.createElement('div');
