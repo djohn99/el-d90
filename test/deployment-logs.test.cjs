@@ -68,7 +68,7 @@ test('reconnect resumes after the last timestamp and suppresses only replay over
  const h=harness([pod('web-a')]);try{
   await waitFor(()=>h.children.length===1);
   const line='[pod/web-a/web] 2026-10-29T18:00:00.123Z old line';h.children[0].stdout.write(line+'\n');h.children[0].emit('close',1);
-  await waitFor(()=>h.children.length===2);assert.ok(h.children[1].args.includes('--since-time=2026-10-29T18:00:00.123Z'));assert.equal(h.children[1].args.includes('--tail=10000'),false);
+  await waitFor(()=>h.children.length===2);assert.ok(h.children[1].args.includes('--since-time=2026-10-29T18:00:00.123Z'));assert.equal(h.children[1].args.some(arg => arg.startsWith('--tail=')),false);
   h.children[1].stdout.write(line+'\nnew repeated line\nnew repeated line\n');
   assert.equal(h.text.join('').match(/old line/g).length,1);assert.equal(h.text.join('').match(/new repeated line/g).length,2);
  }finally{h.session.stop();}

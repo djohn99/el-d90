@@ -35,7 +35,9 @@ test('missing scope and option injection are rejected before a process starts', 
 });
 test('pod log and shell sessions pin context, namespace, pod and container', () => {
   const input = { context: 'test', namespace: 'team', name: 'pod-1', container: 'worker', previous: true, follow: true };
-  const log = kube.logArgs(input); assert.ok(log.includes('--previous')); assert.ok(log.includes('--follow')); assert.ok(log.includes('--request-timeout=0')); assert.equal(log[log.indexOf('--container') + 1], 'worker');
+  const log = kube.logArgs(input); assert.ok(log.includes('--tail=300'));
+  for (const tailLines of [1000, 5000, 10000]) assert.ok(kube.logArgs({...input, tailLines}).includes('--tail=' + tailLines));
+  assert.throws(() => kube.logArgs({...input, tailLines: -1}), /line count/); assert.ok(log.includes('--previous')); assert.ok(log.includes('--follow')); assert.ok(log.includes('--request-timeout=0')); assert.equal(log[log.indexOf('--container') + 1], 'worker');
   const terminal = kube.terminalArgs({ ...input, shell: 'arbitrary-command' }); assert.deepEqual(terminal.slice(-2), ['--', '/bin/sh']); assert.equal(terminal[terminal.indexOf('--context') + 1], 'test'); assert.ok(terminal.includes('-it'));
 });
 test('RBAC errors and deadlines propagate as actionable errors', async () => {
