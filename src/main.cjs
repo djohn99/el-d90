@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, dialog, Menu, MenuItem } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -294,7 +294,18 @@ handle('file:save', async input => {
 handle('app:find',input=>{if(typeof input.query!=='string'||!input.query||input.query.length>1000)throw Error('Enter search text up to 1000 characters');return{id:window.webContents.findInPage(input.query,{forward:input.forward!==false,findNext:input.findNext===true,matchCase:input.matchCase===true})};});
 handle('app:find-stop',()=>{window.webContents.stopFindInPage('clearSelection');return{};});
 async function createWindow() {
-  window = new BrowserWindow({ width: 1460, height: 940, minWidth: 1080, minHeight: 700, title: 'el-d90', backgroundColor: '#101519', titleBarStyle: process.platform==='darwin'?'hiddenInset':'default', trafficLightPosition: { x: 20, y: 21 }, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true } });
+  const launchDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const area = launchDisplay.workArea;
+  window = new BrowserWindow({ ...area, minWidth: Math.min(1080, area.width), minHeight: Math.min(700, area.height), title: 'el-d90', backgroundColor: '#101519', titleBarStyle: process.platform==='darwin'?'hiddenInset':'default', trafficLightPosition: { x: 20, y: 21 }, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true } });
+  let displayId = launchDisplay.id;
+  window.on('moved', () => {
+    const destination = screen.getDisplayMatching(window.getBounds());
+    if (destination.id === displayId) return;
+    displayId = destination.id;
+    const bounds = destination.workArea;
+    window.setMinimumSize(Math.min(1080, bounds.width), Math.min(700, bounds.height));
+    if (!window.isFullScreen() && !window.isMaximized()) window.setBounds(bounds);
+  });
   window.webContents.on('found-in-page',(_event,result)=>window?.webContents.send('app:find-result',result));
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', e => e.preventDefault());
